@@ -316,6 +316,10 @@
     background-color: rgb(23, 31, 36);
 }
 
+.command-mode-button {
+    font-size: 10px;
+}
+
 .fill-button {
     left: 0;
     right: 0;

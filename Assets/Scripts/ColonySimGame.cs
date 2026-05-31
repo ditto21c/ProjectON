@@ -2690,14 +2690,24 @@ namespace ProjectON
                 CommandMode.Cancel
             };
 
+            const int columns = 30;
+            const float leftMargin = 18f;
+            const float topMargin = 8f;
+            const float stepX = 42f;
+            const float stepY = 40f;
+            const float buttonWidth = 38f;
+            const float buttonHeight = 36f;
+
             for (int i = 0; i < modes.Length; i++)
             {
                 CommandMode mode = modes[i];
                 VisualElement slot = CreateSlot("Slot " + mode, parent);
-                float xMin = 18f + i * 40f;
-                SetVerticalSlot(slot, xMin, 14f, 36f, 14f);
+                int column = i % columns;
+                int row = i / columns;
+                SetFixedSlot(slot, leftMargin + column * stepX, topMargin + row * stepY, buttonWidth, buttonHeight);
 
                 Button button = CreateButton(ModeButtonLabel(mode), slot, () => SetMode(mode));
+                button.AddToClassList("command-mode-button");
                 modeButtons[mode] = button;
             }
         }
@@ -2840,6 +2850,15 @@ namespace ProjectON
             element.style.top = top;
             element.style.width = width;
             element.style.bottom = bottom;
+        }
+
+        private static void SetFixedSlot(VisualElement element, float left, float top, float width, float height)
+        {
+            SetAbsolute(element);
+            element.style.left = left;
+            element.style.top = top;
+            element.style.width = width;
+            element.style.height = height;
         }
 
         private static void SetVisible(VisualElement element, bool visible)
