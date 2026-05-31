@@ -920,6 +920,7 @@ namespace ProjectON
         private Label scenarioText;
         private Label jobQueueText;
         private Label jobPolicyText;
+        private Label crewVitalsText;
         private Label overlayLegendTitleText;
         private Label infoText;
         private Label logText;
@@ -928,6 +929,9 @@ namespace ProjectON
         private Button jobPolicyDownButton;
         private Button jobPolicyUpButton;
         private Button jobPolicyResetButton;
+        private Button crewPrevButton;
+        private Button crewNextButton;
+        private Button crewFocusButton;
         private Button priorityDownButton;
         private Button priorityUpButton;
         private Button cancelSelectedJobButton;
@@ -952,6 +956,7 @@ namespace ProjectON
         private ProjectONLanguage currentLanguage = ProjectONLanguage.Korean;
         private JobCategory selectedJobCategory = JobCategory.Construction;
         private int[] jobCategoryPriorityAdjustments = new int[11];
+        private int selectedCrewIndex;
         private Vector2Int? inspectedCell;
         private string lastLog = "Colony online.";
         private string objectiveText = "Build beds, oxygen, power, and food production.";
@@ -2587,6 +2592,7 @@ namespace ProjectON
             scenarioText = RequireElement<Label>("ScenarioText");
             jobQueueText = RequireElement<Label>("JobQueueText");
             jobPolicyText = RequireElement<Label>("JobPolicyText");
+            crewVitalsText = RequireElement<Label>("CrewVitalsText");
             overlayLegendTitleText = RequireElement<Label>("OverlayLegendTitleText");
             overlayLegendRows = RequireElement<VisualElement>("OverlayLegendRows");
             infoText = RequireElement<Label>("InspectText");
@@ -2612,6 +2618,9 @@ namespace ProjectON
             jobPolicyDownButton = RequireElement<Button>("JobPolicyDownButton");
             jobPolicyUpButton = RequireElement<Button>("JobPolicyUpButton");
             jobPolicyResetButton = RequireElement<Button>("JobPolicyResetButton");
+            crewPrevButton = RequireElement<Button>("CrewPrevButton");
+            crewNextButton = RequireElement<Button>("CrewNextButton");
+            crewFocusButton = RequireElement<Button>("CrewFocusButton");
             priorityDownButton = RequireElement<Button>("PriorityDownButton");
             priorityUpButton = RequireElement<Button>("PriorityUpButton");
             cancelSelectedJobButton = RequireElement<Button>("CancelSelectedButton");
@@ -2634,6 +2643,9 @@ namespace ProjectON
             ConfigureButton(jobPolicyDownButton, "Policy -", () => AdjustSelectedJobCategoryPriority(-1));
             ConfigureButton(jobPolicyUpButton, "Policy +", () => AdjustSelectedJobCategoryPriority(1));
             ConfigureButton(jobPolicyResetButton, "Reset", ResetJobCategoryPolicies);
+            ConfigureButton(crewPrevButton, "Crew <", SelectPreviousCrew);
+            ConfigureButton(crewNextButton, "Crew >", SelectNextCrew);
+            ConfigureButton(crewFocusButton, "Focus", FocusSelectedCrew);
             ConfigureButton(endStateLoadButton, "Load Save", () => LoadGame(false));
             ConfigureButton(endStateNewRunButton, "New Run", StartNewRun);
             ConfigureButton(endStateContinueButton, "Continue", ContinueFreeplay);
@@ -2642,6 +2654,78 @@ namespace ProjectON
 
             SetMode(CommandMode.Inspect);
             SetOverlayMode(OverlayMode.Gas);
+        }
+
+        private void SelectPreviousCrew()
+        {
+            CycleSelectedCrew(-1);
+        }
+
+        private void SelectNextCrew()
+        {
+            CycleSelectedCrew(1);
+        }
+
+        private void CycleSelectedCrew(int direction)
+        {
+            if (workers.Count == 0)
+            {
+                selectedCrewIndex = 0;
+                UpdateHud();
+                return;
+            }
+
+            selectedCrewIndex = (selectedCrewIndex + direction) % workers.Count;
+            if (selectedCrewIndex < 0)
+            {
+                selectedCrewIndex += workers.Count;
+            }
+
+            UpdateHud();
+        }
+
+        private void FocusSelectedCrew()
+        {
+            Worker worker = SelectedCrewWorker();
+            if (worker == null)
+            {
+                Log("No duplicant selected.");
+                return;
+            }
+
+            if (worker.Transform != null)
+            {
+                worker.Cell = WorldToCell(worker.Transform.position);
+            }
+
+            inspectedCell = worker.Cell;
+            SetMode(CommandMode.Inspect);
+            if (gameCamera != null)
+            {
+                Vector3 center = CellCenter(worker.Cell);
+                gameCamera.transform.position = new Vector3(center.x, center.y, -10f);
+                ClampCamera();
+            }
+
+            Log("Focused " + worker.Name + ".");
+            UpdateHud();
+        }
+
+        private Worker SelectedCrewWorker()
+        {
+            NormalizeSelectedCrewIndex();
+            return workers.Count == 0 ? null : workers[selectedCrewIndex];
+        }
+
+        private void NormalizeSelectedCrewIndex()
+        {
+            if (workers.Count == 0)
+            {
+                selectedCrewIndex = 0;
+                return;
+            }
+
+            selectedCrewIndex = Mathf.Clamp(selectedCrewIndex, 0, workers.Count - 1);
         }
 
         private void EnsureEventSystem()
@@ -19417,6 +19501,11 @@ namespace ProjectON
                 jobPolicyText.text = Localize(BuildJobPolicyText());
             }
 
+            if (crewVitalsText != null)
+            {
+                crewVitalsText.text = Localize(BuildCrewVitalsText());
+            }
+
             UpdateOverlayLegend();
             logText.text = Localize(lastLog);
             infoText.text = Localize(BuildInspectText());
@@ -20688,6 +20777,224 @@ namespace ProjectON
             builder.Append(" | ");
             builder.Append(techPowerRegulation ? "Power" : "Power " + Mathf.Clamp(28f - researchPoints, 0f, 28f).ToString("0") + "RP");
             return builder.ToString();
+        }
+
+        private string BuildCrewVitalsText()
+        {
+            NormalizeSelectedCrewIndex();
+            StringBuilder builder = new StringBuilder();
+            builder.Append("Crew Vitals ");
+            builder.Append(CountActiveWorkers());
+            builder.Append("/");
+            builder.Append(workers.Count);
+            int incapacitated = CountIncapacitatedWorkers();
+            if (incapacitated > 0)
+            {
+                builder.Append("  Down ");
+                builder.Append(incapacitated);
+            }
+
+            Worker selected = SelectedCrewWorker();
+            if (selected != null)
+            {
+                builder.Append("  Selected ");
+                builder.Append(selected.Name);
+            }
+
+            builder.AppendLine();
+            Worker riskiest = HighestRiskWorker(out string riskText);
+            builder.Append("Worst: ");
+            builder.Append(riskiest == null ? "none" : riskiest.Name + " - " + riskText);
+
+            if (workers.Count == 0)
+            {
+                builder.AppendLine();
+                builder.Append("No duplicants.");
+                return builder.ToString();
+            }
+
+            for (int i = 0; i < workers.Count; i++)
+            {
+                Worker worker = workers[i];
+                builder.AppendLine();
+                builder.Append(i == selectedCrewIndex ? "> " : "  ");
+                builder.Append(worker.Name);
+                builder.Append(" ");
+                builder.Append(CrewVitalsLine(worker));
+            }
+
+            return builder.ToString();
+        }
+
+        private string CrewVitalsLine(Worker worker)
+        {
+            if (worker == null)
+            {
+                return string.Empty;
+            }
+
+            if (worker.Health <= 0f)
+            {
+                return "Down " + worker.IncapacitatedSeconds.ToString("0") + "s  " + WorkerRiskText(worker);
+            }
+
+            StringBuilder builder = new StringBuilder();
+            builder.Append("H");
+            builder.Append(worker.Health.ToString("0"));
+            builder.Append(" Cal");
+            builder.Append(worker.Calories.ToString("0"));
+            builder.Append(" S");
+            builder.Append(worker.Stress.ToString("0"));
+            builder.Append(" F");
+            builder.Append(worker.Fatigue.ToString("0"));
+            builder.Append(" B");
+            builder.Append(worker.Bladder.ToString("0"));
+            builder.Append(" M");
+            builder.Append(Mathf.Clamp(worker.Morale, 0f, 10f).ToString("0.0"));
+            builder.Append("/");
+            builder.Append(WorkerMoraleNeed(worker).ToString("0.0"));
+            builder.Append(" ");
+            builder.Append(WorkerRiskText(worker));
+            if (!string.IsNullOrEmpty(worker.Activity))
+            {
+                builder.Append("  ");
+                builder.Append(worker.Activity);
+            }
+
+            return builder.ToString();
+        }
+
+        private Worker HighestRiskWorker(out string riskText)
+        {
+            Worker riskiest = null;
+            int riskiestScore = int.MinValue;
+            foreach (Worker worker in workers)
+            {
+                int score = WorkerRiskScore(worker);
+                if (score > riskiestScore)
+                {
+                    riskiestScore = score;
+                    riskiest = worker;
+                }
+            }
+
+            riskText = riskiest == null ? "none" : WorkerRiskText(riskiest);
+            return riskiest;
+        }
+
+        private int WorkerRiskScore(Worker worker)
+        {
+            if (worker == null)
+            {
+                return 0;
+            }
+
+            if (worker.Health <= 0f)
+            {
+                return 10000 + Mathf.RoundToInt(worker.IncapacitatedSeconds);
+            }
+
+            int score = 0;
+            score += Mathf.RoundToInt((100f - worker.Health) * 2f);
+            score += Mathf.RoundToInt(Mathf.Max(0f, 1400f - worker.Calories) / 5f);
+            score += Mathf.RoundToInt(worker.Stress * 1.4f);
+            score += Mathf.RoundToInt(worker.Fatigue * 1.1f);
+            score += Mathf.RoundToInt(worker.Bladder * 1.1f);
+            score += Mathf.RoundToInt(worker.Sickness * 2f);
+            score += Mathf.RoundToInt(worker.GermExposure * 1.1f);
+            score += Mathf.RoundToInt(Mathf.Max(worker.HeatExposure, worker.ChillExposure) * 2f);
+            score += Mathf.RoundToInt(WorkerMoraleDeficit(worker) * 60f);
+            if (worker.StressBreakSeconds > 0f)
+            {
+                score += 9000;
+            }
+
+            return score;
+        }
+
+        private string WorkerRiskText(Worker worker)
+        {
+            if (worker == null)
+            {
+                return "none";
+            }
+
+            if (worker.Health <= 0f)
+            {
+                return "Needs rescue";
+            }
+
+            if (worker.StressBreakSeconds > 0f)
+            {
+                return "Stress break";
+            }
+
+            if (worker.Health <= 35f)
+            {
+                return "Critical health";
+            }
+
+            if (worker.Calories <= 350f)
+            {
+                return "Starving";
+            }
+
+            if (worker.Sickness >= 70f)
+            {
+                return "Severe sickness";
+            }
+
+            if (Mathf.Max(worker.HeatExposure, worker.ChillExposure) >= ThermalInjuryExposureThreshold)
+            {
+                return "Thermal danger";
+            }
+
+            if (worker.Stress >= 90f)
+            {
+                return "Stress critical";
+            }
+
+            if (worker.Fatigue >= 92f)
+            {
+                return "Exhausted";
+            }
+
+            if (worker.Bladder >= 94f)
+            {
+                return "Bladder critical";
+            }
+
+            if (worker.GermExposure >= 85f)
+            {
+                return "Germ risk";
+            }
+
+            if (WorkerMoraleDeficit(worker) > 1.25f)
+            {
+                return "Morale deficit";
+            }
+
+            if (worker.Calories <= 850f)
+            {
+                return "Hungry";
+            }
+
+            if (worker.Stress >= 70f)
+            {
+                return "High stress";
+            }
+
+            if (worker.Fatigue >= 78f)
+            {
+                return "Very tired";
+            }
+
+            if (worker.Bladder >= 82f)
+            {
+                return "Needs toilet";
+            }
+
+            return "Stable";
         }
 
         private string WorkerSummary()

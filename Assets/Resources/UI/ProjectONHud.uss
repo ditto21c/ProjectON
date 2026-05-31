@@ -191,6 +191,46 @@
     left: 452px;
 }
 
+.crew-vitals-panel {
+    left: 16px;
+    top: 340px;
+    width: 564px;
+    height: 224px;
+    background-color: rgba(5, 7, 9, 0.76);
+}
+
+.crew-vitals-text {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 8px;
+    bottom: 46px;
+    color: rgb(223, 234, 236);
+    font-size: 13px;
+    -unity-text-align: upper-left;
+    white-space: normal;
+}
+
+.crew-button {
+    bottom: 10px;
+    width: 128px;
+    height: 30px;
+    font-size: 12px;
+}
+
+.crew-prev-button {
+    left: 12px;
+}
+
+.crew-next-button {
+    left: 150px;
+}
+
+.crew-focus-button {
+    left: 288px;
+    width: 148px;
+}
+
 .scenario-panel {
     left: 16px;
     bottom: 198px;
