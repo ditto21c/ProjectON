@@ -244,6 +244,8 @@ namespace ProjectON
             { "Job: ", "작업: " },
             { "Target ", "대상 " },
             { "Priority ", "우선순위 " },
+            { "Waiting ", "대기 " },
+            { "Effective priority ", "적용 우선순위 " },
             { "Progress ", "진행률 " },
             { "Health ", "체력 " },
             { "Calories ", "칼로리 " },
