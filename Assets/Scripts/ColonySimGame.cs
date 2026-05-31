@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 
 namespace ProjectON
 {
@@ -17,7 +17,8 @@ namespace ProjectON
         private const int WorldWidth = 80;
         private const int WorldHeight = 46;
         private const float CycleLengthSeconds = 120f;
-        private const int SaveVersion = 72;
+        private const int SaveVersion = 73;
+        private const int ScenarioMilestoneTotal = 53;
         private const float AutosaveIntervalSeconds = 45f;
         private const float ObjectiveRefreshSeconds = 1f;
         private const float DefaultSleepStartCycleTime = 0.72f;
@@ -739,6 +740,7 @@ namespace ProjectON
             public bool colonyVictory;
             public bool colonyFailed;
             public string lastLog;
+            public string language;
         }
 
         [Serializable]
@@ -873,6 +875,7 @@ namespace ProjectON
         private readonly List<Vector2Int> pollutedWaterOffgasSources = new List<Vector2Int>();
         private readonly Dictionary<CommandMode, Button> modeButtons = new Dictionary<CommandMode, Button>();
         private readonly Dictionary<OverlayMode, Button> overlayButtons = new Dictionary<OverlayMode, Button>();
+        private readonly Dictionary<TextElement, string> localizedStaticTexts = new Dictionary<TextElement, string>();
         private readonly HashSet<int> dragCells = new HashSet<int>();
 
         private Texture2D terrainTexture;
@@ -884,24 +887,40 @@ namespace ProjectON
         private Sprite workerSprite;
         private Sprite hatchSprite;
         private Camera gameCamera;
-        private Canvas canvas;
-        private Text statsText;
-        private Text modeText;
-        private Text infoText;
-        private Text logText;
+        private UIDocument uiDocument;
+        private PanelSettings uiPanelSettings;
+        private VisualElement uiRoot;
+        private VisualElement overlayLegendRows;
+        private Label statsText;
+        private Label modeText;
+        private Label scenarioText;
+        private Label overlayLegendTitleText;
+        private Label infoText;
+        private Label logText;
         private Button priorityDownButton;
         private Button priorityUpButton;
         private Button cancelSelectedJobButton;
         private Button signalSwitchButton;
         private Button airlockToggleButton;
+        private Button languageButton;
+        private VisualElement endStatePanel;
+        private Label endStateTitleText;
+        private Label endStateBodyText;
+        private Button endStateLoadButton;
+        private Button endStateNewRunButton;
+        private Button endStateContinueButton;
         private Font uiFont;
 
         private CommandMode currentMode = CommandMode.Inspect;
         private OverlayMode currentOverlayMode = OverlayMode.Gas;
+        private OverlayMode renderedLegendOverlayMode = (OverlayMode)(-1);
+        private ProjectONLanguage renderedLegendLanguage = (ProjectONLanguage)(-1);
+        private ProjectONLanguage currentLanguage = ProjectONLanguage.Korean;
         private Vector2Int? inspectedCell;
         private string lastLog = "Colony online.";
         private string objectiveText = "Build beds, oxygen, power, and food production.";
         private string alertText = "Stable.";
+        private int unreachableJobCount;
         private float dirt = 130f;
         private float metal = 80f;
         private float algae = 45f;
@@ -1072,6 +1091,7 @@ namespace ProjectON
         private bool techFoodPreparation;
         private bool techPowerRegulation;
         private bool colonyVictory;
+        private bool colonyVictoryAcknowledged;
         private bool colonyFailed;
         private bool terrainDirty = true;
         private bool gasDirty = true;
@@ -2145,9 +2165,9 @@ namespace ProjectON
                 return;
             }
 
-            SpawnWorker("Ari", new Vector2Int(34, 20), WorkerTint(0));
+            SpawnWorker("Ari", new Vector2Int(34, 19), WorkerTint(0));
             SpawnWorker("Bomi", new Vector2Int(40, 20), WorkerTint(1));
-            SpawnWorker("Chae", new Vector2Int(46, 20), WorkerTint(2));
+            SpawnWorker("Chae", new Vector2Int(46, 19), WorkerTint(2));
         }
 
         private void EnsureWorkerRecords()
@@ -2171,7 +2191,7 @@ namespace ProjectON
                     continue;
                 }
 
-                workers.Add(new Worker
+                Worker worker = new Worker
                 {
                     Name = child.name.Substring("Duplicant ".Length),
                     Transform = child,
@@ -2185,7 +2205,15 @@ namespace ProjectON
                     Experience = 0f,
                     WorkSpeed = 1f,
                     MoveSpeed = 5f
-                });
+                };
+
+                if (!IsCharacterStandableCell(worker.Cell) && TryFindCharacterStandableCellNear(worker.Cell, 8, worker, out Vector2Int safeCell))
+                {
+                    worker.Cell = safeCell;
+                    worker.Transform.position = CellCenter(safeCell);
+                }
+
+                workers.Add(worker);
             }
 
             if (workers.Count == 0)
@@ -2220,8 +2248,152 @@ namespace ProjectON
             }
         }
 
+        private void StartNewRun()
+        {
+            ClearWorkers();
+            jobs.Clear();
+            rooms.Clear();
+            pollutedWaterOffgasSources.Clear();
+            dragCells.Clear();
+            inspectedCell = null;
+            isDraggingCommand = false;
+            isPanningCamera = false;
+
+            ResetRunState();
+            GenerateWorld();
+            CreateWorkers();
+
+            SetMode(CommandMode.Inspect);
+            SetOverlayMode(OverlayMode.Gas);
+            RenderTerrain();
+            RenderGas();
+            RenderOverlay();
+            UpdateColonyStatus(true);
+            Log("New colony started.");
+            UpdateHud();
+        }
+
+        private void ResetRunState()
+        {
+            lastLog = "Colony online.";
+            objectiveText = "Build beds, oxygen, power, and food production.";
+            alertText = "Stable.";
+            unreachableJobCount = 0;
+            dirt = 130f;
+            metal = 80f;
+            algae = 45f;
+            coal = 0f;
+            refinedMetal = 0f;
+            water = 45f;
+            pollutedWater = 0f;
+            pollutedDirt = 0f;
+            researchPoints = 0f;
+            food = 3600f;
+            foodFreshness = 0.82f;
+            power = 35f;
+            maxPower = 100f;
+            elapsedTime = 0f;
+            cycleTimer = 0f;
+            gasTimer = 0f;
+            thermalTimer = 0f;
+            liquidTimer = 0f;
+            sandTimer = 0f;
+            maintenanceTimer = 0f;
+            autosaveTimer = 0f;
+            objectiveTimer = 0f;
+            cycle = 1;
+            paused = false;
+            simulationSpeed = 1f;
+            sleepStartCycleTime = DefaultSleepStartCycleTime;
+            sleepEndCycleTime = DefaultSleepEndCycleTime;
+            techAirSystems = false;
+            techFoodPreparation = false;
+            techPowerRegulation = false;
+            colonyVictory = false;
+            colonyVictoryAcknowledged = false;
+            colonyFailed = false;
+
+            milestoneBasicShelter = false;
+            milestoneStableOxygen = false;
+            milestoneFoodProduction = false;
+            milestonePowerBuffer = false;
+            milestoneCycleFive = false;
+            milestoneResearchProgram = false;
+            milestoneWaterSupply = false;
+            milestoneFoodPreparation = false;
+            milestoneThermalControl = false;
+            milestonePowerGrid = false;
+            milestoneSanitation = false;
+            milestoneMoraleCare = false;
+            milestonePressureControl = false;
+            milestoneAirlockControl = false;
+            milestoneFoodStorage = false;
+            milestoneMaterialStorage = false;
+            milestonePlumbing = false;
+            milestoneVentilation = false;
+            milestoneAdvancedAtmosphere = false;
+            milestoneWaterRecycling = false;
+            milestoneDining = false;
+            milestoneSkilledLabor = false;
+            milestoneDecorComfort = false;
+            milestoneWasteProcessing = false;
+            milestoneAutomation = false;
+            milestoneFuelPower = false;
+            milestoneMetalRefining = false;
+            milestoneAtmoSuits = false;
+            milestoneInsulation = false;
+            milestoneRoomPlanning = false;
+            milestoneReconfiguration = false;
+            milestoneColonyExpansion = false;
+            milestoneSpillCleanup = false;
+            milestoneMaintenance = false;
+            milestoneEmergencyResponse = false;
+            milestoneResourceLogistics = false;
+            milestoneHydrogenPower = false;
+            milestoneHydrogenFiltering = false;
+            milestoneReservoirBuffering = false;
+            milestoneConduitAutomation = false;
+            milestoneRenewableVents = false;
+            milestoneRanching = false;
+            milestonePowerLoadManagement = false;
+            milestoneHygiene = false;
+            milestoneCropTending = false;
+            milestoneAutoSweeping = false;
+            milestoneShippingLogistics = false;
+            milestoneBottleEmptying = false;
+            milestoneSignalSwitching = false;
+            milestoneSteamPower = false;
+            milestoneSolarPower = false;
+            milestoneMeteorShielding = false;
+            milestoneSpaceScanning = false;
+
+            terrainDirty = true;
+            gasDirty = true;
+            overlayDirty = true;
+            roomsDirty = true;
+        }
+
+        private void ClearWorkers()
+        {
+            for (int i = transform.childCount - 1; i >= 0; i--)
+            {
+                Transform child = transform.GetChild(i);
+                if (child.name.StartsWith("Duplicant ", StringComparison.Ordinal))
+                {
+                    DestroyRuntimeObject(child.gameObject);
+                }
+            }
+
+            workers.Clear();
+        }
+
         private void SpawnWorker(string workerName, Vector2Int cell, Color tint)
         {
+            if (!IsCharacterStandableCell(cell) && TryFindCharacterStandableCellNear(cell, 8, null, out Vector2Int safeCell))
+            {
+                cell = safeCell;
+            }
+
             GameObject workerObject = new GameObject("Duplicant " + workerName);
             workerObject.transform.SetParent(transform, false);
             workerObject.transform.position = CellCenter(cell);
@@ -2335,63 +2507,88 @@ namespace ProjectON
                 uiFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
             }
 
-            GameObject canvasObject = new GameObject("ProjectON HUD");
-            canvas = canvasObject.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvasObject.AddComponent<GraphicRaycaster>();
+            VisualTreeAsset hudTree = Resources.Load<VisualTreeAsset>("UI/ProjectONHud");
+            if (hudTree == null)
+            {
+                Debug.LogError("ProjectON HUD UXML not found at Resources/UI/ProjectONHud.uxml.");
+                return;
+            }
 
-            CanvasScaler scaler = canvasObject.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
-            scaler.matchWidthOrHeight = 0.5f;
+            GameObject uiObject = new GameObject("ProjectON HUD");
+            uiPanelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            uiPanelSettings.name = "ProjectON Runtime Panel Settings";
+            uiPanelSettings.scaleMode = PanelScaleMode.ScaleWithScreenSize;
+            uiPanelSettings.referenceResolution = new Vector2Int(1920, 1080);
+            uiPanelSettings.screenMatchMode = PanelScreenMatchMode.MatchWidthOrHeight;
+            uiPanelSettings.match = 0.5f;
+            uiPanelSettings.sortingOrder = 100;
+            uiPanelSettings.clearColor = false;
+            ThemeStyleSheet runtimeTheme = Resources.Load<ThemeStyleSheet>("UnityDefaultRuntimeTheme");
+            if (runtimeTheme != null)
+            {
+                uiPanelSettings.themeStyleSheet = runtimeTheme;
+            }
 
-            RectTransform topBar = CreatePanel("Top Bar", canvas.transform, new Color(0.015f, 0.018f, 0.022f, 0.88f));
-            SetStretch(topBar, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -88f), Vector2.zero);
+            uiDocument = uiObject.AddComponent<UIDocument>();
+            uiDocument.panelSettings = uiPanelSettings;
+            uiDocument.visualTreeAsset = hudTree;
+            uiDocument.rootVisualElement.pickingMode = PickingMode.Ignore;
 
-            statsText = CreateText("Stats", topBar, 18, TextAnchor.MiddleLeft, new Color(0.88f, 0.93f, 0.95f));
-            SetStretch(statsText.rectTransform, new Vector2(0f, 0f), new Vector2(0.68f, 1f), new Vector2(18f, 0f), new Vector2(-8f, 0f));
+            uiRoot = uiDocument.rootVisualElement.Q<VisualElement>("ProjectONHudRoot");
+            if (uiRoot == null)
+            {
+                Debug.LogError("ProjectON HUD UXML is missing ProjectONHudRoot.");
+                return;
+            }
 
-            modeText = CreateText("Mode", topBar, 18, TextAnchor.MiddleRight, new Color(1f, 0.92f, 0.68f));
-            SetStretch(modeText.rectTransform, new Vector2(0.68f, 0f), new Vector2(1f, 1f), new Vector2(0f, 0f), new Vector2(-18f, 0f));
+            uiRoot.pickingMode = PickingMode.Ignore;
+            ApplyRuntimeFont(uiRoot);
 
-            RectTransform overlayPanel = CreatePanel("Overlay Panel", canvas.transform, new Color(0.015f, 0.018f, 0.022f, 0.72f));
-            SetStretch(overlayPanel, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(600f, -138f), new Vector2(1220f, -96f));
-            CreateOverlayToolbar(overlayPanel);
+            statsText = RequireElement<Label>("Stats");
+            modeText = RequireElement<Label>("Mode");
+            scenarioText = RequireElement<Label>("ScenarioText");
+            overlayLegendTitleText = RequireElement<Label>("OverlayLegendTitleText");
+            overlayLegendRows = RequireElement<VisualElement>("OverlayLegendRows");
+            infoText = RequireElement<Label>("InspectText");
+            logText = RequireElement<Label>("LogText");
 
-            RectTransform schedulePanel = CreatePanel("Schedule Panel", canvas.transform, new Color(0.015f, 0.018f, 0.022f, 0.72f));
-            SetStretch(schedulePanel, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(1068f, -138f), new Vector2(1536f, -96f));
-            CreateScheduleToolbar(schedulePanel);
+            CreateToolbar(RequireElement<VisualElement>("CommandToolbar"));
+            CreateOverlayToolbar(RequireElement<VisualElement>("OverlayToolbar"));
 
-            RectTransform rightPanel = CreatePanel("Inspect Panel", canvas.transform, new Color(0.02f, 0.024f, 0.03f, 0.76f));
-            SetStretch(rightPanel, new Vector2(1f, 0.18f), new Vector2(1f, 0.72f), new Vector2(-330f, 0f), new Vector2(-16f, 0f));
+            ConfigureButton(RequireElement<Button>("ScheduleStartDownButton"), "Start-\nF6", () => AdjustSleepStart(-ScheduleStep));
+            ConfigureButton(RequireElement<Button>("ScheduleStartUpButton"), "Start+\nF7", () => AdjustSleepStart(ScheduleStep));
+            ConfigureButton(RequireElement<Button>("ScheduleWakeDownButton"), "Wake-\nF8", () => AdjustSleepEnd(-ScheduleStep));
+            ConfigureButton(RequireElement<Button>("ScheduleWakeUpButton"), "Wake+\nF10", () => AdjustSleepEnd(ScheduleStep));
+            ConfigureButton(RequireElement<Button>("SaveButton"), "Save\nF5", () => SaveGame(false));
+            ConfigureButton(RequireElement<Button>("LoadButton"), "Load\nF9", () => LoadGame(false));
+            ConfigureButton(RequireElement<Button>("PauseButton"), "Pause\nSpace", TogglePause);
+            ConfigureButton(RequireElement<Button>("SpeedButton"), "Speed\n-/+", CycleSpeed);
 
-            infoText = CreateText("Inspect Text", rightPanel, 16, TextAnchor.UpperLeft, new Color(0.88f, 0.91f, 0.92f));
-            SetStretch(infoText.rectTransform, Vector2.zero, Vector2.one, new Vector2(14f, 72f), new Vector2(-14f, -14f));
+            languageButton = RequireElement<Button>("LanguageButton");
+            ConfigureButton(languageButton, LanguageButtonLabel(), ToggleLanguage);
 
-            RectTransform priorityDownSlot = CreatePanel("Priority Down Slot", rightPanel, new Color(0f, 0f, 0f, 0f));
-            SetStretch(priorityDownSlot, Vector2.zero, Vector2.zero, new Vector2(14f, 14f), new Vector2(90f, 58f));
-            priorityDownButton = CreateButton("Pri -\n[", priorityDownSlot, () => AdjustInspectedJobPriority(-1));
+            priorityDownButton = RequireElement<Button>("PriorityDownButton");
+            priorityUpButton = RequireElement<Button>("PriorityUpButton");
+            cancelSelectedJobButton = RequireElement<Button>("CancelSelectedButton");
+            signalSwitchButton = RequireElement<Button>("SignalSwitchButton");
+            airlockToggleButton = RequireElement<Button>("AirlockToggleButton");
+            endStatePanel = RequireElement<VisualElement>("EndStatePanel");
+            endStateTitleText = RequireElement<Label>("EndStateTitleText");
+            endStateBodyText = RequireElement<Label>("EndStateBodyText");
+            endStateLoadButton = RequireElement<Button>("EndStateLoadButton");
+            endStateNewRunButton = RequireElement<Button>("EndStateNewRunButton");
+            endStateContinueButton = RequireElement<Button>("EndStateContinueButton");
 
-            RectTransform priorityUpSlot = CreatePanel("Priority Up Slot", rightPanel, new Color(0f, 0f, 0f, 0f));
-            SetStretch(priorityUpSlot, Vector2.zero, Vector2.zero, new Vector2(98f, 14f), new Vector2(174f, 58f));
-            priorityUpButton = CreateButton("Pri +\n]", priorityUpSlot, () => AdjustInspectedJobPriority(1));
-
-            RectTransform cancelSelectedSlot = CreatePanel("Cancel Selected Slot", rightPanel, new Color(0f, 0f, 0f, 0f));
-            SetStretch(cancelSelectedSlot, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-124f, 14f), new Vector2(-14f, 58f));
-            cancelSelectedJobButton = CreateButton("Cancel\nDel", cancelSelectedSlot, CancelInspectedJob);
-            signalSwitchButton = CreateButton("Switch\nOFF", cancelSelectedSlot, ToggleInspectedSignalSwitch);
-            airlockToggleButton = CreateButton("Door\nOPEN", cancelSelectedSlot, ToggleInspectedAirlock);
+            ConfigureButton(priorityDownButton, "Pri -\n[", () => AdjustInspectedJobPriority(-1));
+            ConfigureButton(priorityUpButton, "Pri +\n]", () => AdjustInspectedJobPriority(1));
+            ConfigureButton(cancelSelectedJobButton, "Cancel\nDel", CancelInspectedJob);
+            ConfigureButton(signalSwitchButton, "Switch\nOFF", ToggleInspectedSignalSwitch);
+            ConfigureButton(airlockToggleButton, "Door\nOPEN", ToggleInspectedAirlock);
+            ConfigureButton(endStateLoadButton, "Load Save", () => LoadGame(false));
+            ConfigureButton(endStateNewRunButton, "New Run", StartNewRun);
+            ConfigureButton(endStateContinueButton, "Continue", ContinueFreeplay);
             SetInspectControlsVisible(false);
-
-            RectTransform bottomBar = CreatePanel("Command Bar", canvas.transform, new Color(0.015f, 0.018f, 0.022f, 0.9f));
-            SetStretch(bottomBar, Vector2.zero, new Vector2(1f, 0f), Vector2.zero, new Vector2(0f, 132f));
-
-            CreateToolbar(bottomBar);
-
-            RectTransform logPanel = CreatePanel("Log Panel", canvas.transform, new Color(0.02f, 0.025f, 0.028f, 0.68f));
-            SetStretch(logPanel, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(16f, 146f), new Vector2(580f, 190f));
-            logText = CreateText("Log Text", logPanel, 15, TextAnchor.MiddleLeft, new Color(0.93f, 0.9f, 0.72f));
-            SetStretch(logText.rectTransform, Vector2.zero, Vector2.one, new Vector2(12f, 0f), new Vector2(-12f, 0f));
+            SetVisible(endStatePanel, false);
 
             SetMode(CommandMode.Inspect);
             SetOverlayMode(OverlayMode.Gas);
@@ -2418,7 +2615,7 @@ namespace ProjectON
             }
         }
 
-        private void CreateToolbar(RectTransform parent)
+        private void CreateToolbar(VisualElement parent)
         {
             CommandMode[] modes =
             {
@@ -2496,32 +2693,16 @@ namespace ProjectON
             for (int i = 0; i < modes.Length; i++)
             {
                 CommandMode mode = modes[i];
-                RectTransform slot = CreatePanel("Slot " + mode, parent, new Color(0f, 0f, 0f, 0f));
+                VisualElement slot = CreateSlot("Slot " + mode, parent);
                 float xMin = 18f + i * 40f;
-                SetStretch(slot, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(xMin, 14f), new Vector2(xMin + 36f, -14f));
+                SetVerticalSlot(slot, xMin, 14f, 36f, 14f);
 
                 Button button = CreateButton(ModeButtonLabel(mode), slot, () => SetMode(mode));
                 modeButtons[mode] = button;
             }
-
-            RectTransform saveSlot = CreatePanel("Save Slot", parent, new Color(0f, 0f, 0f, 0f));
-            SetStretch(saveSlot, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-600f, 14f), new Vector2(-468f, -14f));
-            CreateButton("Save\nF5", saveSlot, () => SaveGame(false));
-
-            RectTransform loadSlot = CreatePanel("Load Slot", parent, new Color(0f, 0f, 0f, 0f));
-            SetStretch(loadSlot, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-456f, 14f), new Vector2(-324f, -14f));
-            CreateButton("Load\nF9", loadSlot, () => LoadGame(false));
-
-            RectTransform speedSlot = CreatePanel("Speed Slot", parent, new Color(0f, 0f, 0f, 0f));
-            SetStretch(speedSlot, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-312f, 14f), new Vector2(-180f, -14f));
-            CreateButton("Pause\nSpace", speedSlot, TogglePause);
-
-            RectTransform fastSlot = CreatePanel("Fast Slot", parent, new Color(0f, 0f, 0f, 0f));
-            SetStretch(fastSlot, new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(-168f, 14f), new Vector2(-18f, -14f));
-            CreateButton("Speed\n-/+", fastSlot, CycleSpeed);
         }
 
-        private void CreateOverlayToolbar(RectTransform parent)
+        private void CreateOverlayToolbar(VisualElement parent)
         {
             OverlayMode[] modes =
             {
@@ -2539,100 +2720,134 @@ namespace ProjectON
             for (int i = 0; i < modes.Length; i++)
             {
                 OverlayMode mode = modes[i];
-                RectTransform slot = CreatePanel("Overlay Slot " + mode, parent, new Color(0f, 0f, 0f, 0f));
+                VisualElement slot = CreateSlot("Overlay Slot " + mode, parent);
                 float xMin = 8f + i * 68f;
-                SetStretch(slot, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(xMin, 5f), new Vector2(xMin + 60f, -5f));
+                SetVerticalSlot(slot, xMin, 5f, 60f, 5f);
 
                 Button button = CreateButton(OverlayButtonLabel(mode), slot, () => SetOverlayMode(mode));
                 overlayButtons[mode] = button;
             }
         }
 
-        private void CreateScheduleToolbar(RectTransform parent)
+        private VisualElement CreateSlot(string slotName, VisualElement parent)
         {
-            string[] labels =
-            {
-                "Start-\nF6",
-                "Start+\nF7",
-                "Wake-\nF8",
-                "Wake+\nF10"
-            };
-
-            UnityEngine.Events.UnityAction[] actions =
-            {
-                () => AdjustSleepStart(-ScheduleStep),
-                () => AdjustSleepStart(ScheduleStep),
-                () => AdjustSleepEnd(-ScheduleStep),
-                () => AdjustSleepEnd(ScheduleStep)
-            };
-
-            for (int i = 0; i < labels.Length; i++)
-            {
-                RectTransform slot = CreatePanel("Schedule Slot " + i, parent, new Color(0f, 0f, 0f, 0f));
-                float xMin = 8f + i * 114f;
-                SetStretch(slot, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(xMin, 5f), new Vector2(xMin + 106f, -5f));
-                CreateButton(labels[i], slot, actions[i]);
-            }
+            VisualElement slot = new VisualElement { name = slotName, pickingMode = PickingMode.Ignore };
+            slot.AddToClassList("toolbar-slot");
+            parent.Add(slot);
+            return slot;
         }
 
-        private RectTransform CreatePanel(string panelName, Transform parent, Color color)
+        private Button CreateButton(string label, VisualElement parent, Action onClick)
         {
-            GameObject panelObject = new GameObject(panelName);
-            panelObject.transform.SetParent(parent, false);
-            RectTransform rectTransform = panelObject.AddComponent<RectTransform>();
-            Image image = panelObject.AddComponent<Image>();
-            image.color = color;
-            return rectTransform;
-        }
+            Button button = new Button(onClick)
+            {
+                name = "Button " + label.Replace("\n", " "),
+                text = Localize(label)
+            };
 
-        private Button CreateButton(string label, Transform parent, UnityEngine.Events.UnityAction onClick)
-        {
-            GameObject buttonObject = new GameObject("Button " + label.Replace("\n", " "));
-            buttonObject.transform.SetParent(parent, false);
-            RectTransform rectTransform = buttonObject.AddComponent<RectTransform>();
-            SetStretch(rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-
-            Image image = buttonObject.AddComponent<Image>();
-            image.color = new Color(0.13f, 0.16f, 0.18f, 0.96f);
-
-            Button button = buttonObject.AddComponent<Button>();
-            ColorBlock colors = button.colors;
-            colors.normalColor = image.color;
-            colors.highlightedColor = new Color(0.22f, 0.28f, 0.31f, 1f);
-            colors.pressedColor = new Color(0.09f, 0.12f, 0.14f, 1f);
-            colors.selectedColor = colors.highlightedColor;
-            button.colors = colors;
-            button.onClick.AddListener(onClick);
-
-            Text labelText = CreateText("Label", rectTransform, 15, TextAnchor.MiddleCenter, new Color(0.92f, 0.94f, 0.92f));
-            SetStretch(labelText.rectTransform, Vector2.zero, Vector2.one, new Vector2(4f, 4f), new Vector2(-4f, -4f));
-            labelText.text = label;
-            labelText.resizeTextForBestFit = true;
-            labelText.resizeTextMinSize = 10;
-            labelText.resizeTextMaxSize = 15;
+            button.AddToClassList("projecton-button");
+            button.AddToClassList("fill-button");
+            ApplyRuntimeFont(button);
+            localizedStaticTexts[button] = label;
+            parent.Add(button);
             return button;
         }
 
-        private Text CreateText(string textName, Transform parent, int size, TextAnchor alignment, Color color)
+        private void ConfigureButton(Button button, string label, Action onClick)
         {
-            GameObject textObject = new GameObject(textName);
-            textObject.transform.SetParent(parent, false);
-            Text text = textObject.AddComponent<Text>();
-            text.font = uiFont;
-            text.fontSize = size;
-            text.alignment = alignment;
-            text.color = color;
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Truncate;
-            return text;
+            if (button == null)
+            {
+                return;
+            }
+
+            button.clicked += onClick;
+            button.text = Localize(label);
+            ApplyRuntimeFont(button);
+            localizedStaticTexts[button] = label;
         }
 
-        private static void SetStretch(RectTransform rectTransform, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        private T RequireElement<T>(string elementName) where T : VisualElement
         {
-            rectTransform.anchorMin = anchorMin;
-            rectTransform.anchorMax = anchorMax;
-            rectTransform.offsetMin = offsetMin;
-            rectTransform.offsetMax = offsetMax;
+            T element = uiRoot == null ? null : uiRoot.Q<T>(elementName);
+            if (element == null)
+            {
+                Debug.LogError("ProjectON HUD UXML is missing element: " + elementName);
+            }
+
+            return element;
+        }
+
+        private void ApplyRuntimeFont(VisualElement element)
+        {
+            if (element != null && uiFont != null)
+            {
+                element.style.unityFontDefinition = new StyleFontDefinition(uiFont);
+            }
+        }
+
+        private string Localize(string text)
+        {
+            return ProjectONStringTable.LocalizeBlock(text, currentLanguage);
+        }
+
+        private string LanguageButtonLabel()
+        {
+            return currentLanguage == ProjectONLanguage.Korean ? "Language\nKorean" : "Language\nEnglish";
+        }
+
+        private void ToggleLanguage()
+        {
+            currentLanguage = currentLanguage == ProjectONLanguage.Korean ? ProjectONLanguage.English : ProjectONLanguage.Korean;
+            Log(currentLanguage == ProjectONLanguage.Korean ? "Language changed to Korean." : "Language changed to English.");
+            RefreshLocalizedStaticTexts();
+            RefreshModeButtonLabels();
+            RefreshLanguageButtonLabel();
+            renderedLegendOverlayMode = (OverlayMode)(-1);
+            overlayDirty = true;
+            UpdateHud();
+        }
+
+        private void RefreshLocalizedStaticTexts()
+        {
+            foreach (KeyValuePair<TextElement, string> pair in localizedStaticTexts)
+            {
+                if (pair.Key != null)
+                {
+                    pair.Key.text = Localize(pair.Value);
+                }
+            }
+        }
+
+        private void RefreshLanguageButtonLabel()
+        {
+            if (languageButton == null)
+            {
+                return;
+            }
+
+            languageButton.text = Localize(LanguageButtonLabel());
+        }
+
+        private static void SetAbsolute(VisualElement element)
+        {
+            element.style.position = Position.Absolute;
+        }
+
+        private static void SetVerticalSlot(VisualElement element, float left, float top, float width, float bottom)
+        {
+            SetAbsolute(element);
+            element.style.left = left;
+            element.style.top = top;
+            element.style.width = width;
+            element.style.bottom = bottom;
+        }
+
+        private static void SetVisible(VisualElement element, bool visible)
+        {
+            if (element != null)
+            {
+                element.EnableInClassList("hidden", !visible);
+            }
         }
 
         private void HandleKeyboardShortcuts()
@@ -2816,12 +3031,14 @@ namespace ProjectON
 
         private bool IsScreenPositionBlocked(Vector2 screenPosition)
         {
-            if (screenPosition.y < 138f || screenPosition.y > Screen.height - 92f)
+            if (uiRoot == null || uiRoot.panel == null)
             {
-                return true;
+                return false;
             }
 
-            return EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+            Vector2 panelPosition = RuntimePanelUtils.ScreenToPanel(uiRoot.panel, screenPosition);
+            VisualElement picked = uiRoot.panel.Pick(panelPosition);
+            return picked != null && picked != uiRoot;
         }
 
         private bool TryScreenToCell(Vector2 screenPosition, out Vector2Int cell)
@@ -2875,10 +3092,7 @@ namespace ProjectON
             currentMode = mode;
             foreach (KeyValuePair<CommandMode, Button> pair in modeButtons)
             {
-                Image image = pair.Value.GetComponent<Image>();
-                image.color = pair.Key == currentMode
-                    ? new Color(0.22f, 0.38f, 0.45f, 1f)
-                    : new Color(0.13f, 0.16f, 0.18f, 0.96f);
+                pair.Value.EnableInClassList("mode-selected", pair.Key == currentMode);
             }
 
             overlayDirty = true;
@@ -2887,12 +3101,10 @@ namespace ProjectON
         private void SetOverlayMode(OverlayMode mode)
         {
             currentOverlayMode = mode;
+            renderedLegendOverlayMode = (OverlayMode)(-1);
             foreach (KeyValuePair<OverlayMode, Button> pair in overlayButtons)
             {
-                Image image = pair.Value.GetComponent<Image>();
-                image.color = pair.Key == currentOverlayMode
-                    ? new Color(0.36f, 0.30f, 0.15f, 1f)
-                    : new Color(0.13f, 0.16f, 0.18f, 0.96f);
+                pair.Value.EnableInClassList("overlay-selected", pair.Key == currentOverlayMode);
             }
 
             gasDirty = true;
@@ -2988,27 +3200,27 @@ namespace ProjectON
         {
             if (priorityDownButton != null)
             {
-                priorityDownButton.gameObject.SetActive(visible);
+                SetVisible(priorityDownButton, visible);
             }
 
             if (priorityUpButton != null)
             {
-                priorityUpButton.gameObject.SetActive(visible);
+                SetVisible(priorityUpButton, visible);
             }
 
             if (cancelSelectedJobButton != null)
             {
-                cancelSelectedJobButton.gameObject.SetActive(visible);
+                SetVisible(cancelSelectedJobButton, visible);
             }
 
             if (signalSwitchButton != null)
             {
-                signalSwitchButton.gameObject.SetActive(false);
+                SetVisible(signalSwitchButton, false);
             }
 
             if (airlockToggleButton != null)
             {
-                airlockToggleButton.gameObject.SetActive(false);
+                SetVisible(airlockToggleButton, false);
             }
         }
 
@@ -3026,28 +3238,20 @@ namespace ProjectON
             if (signalSwitchButton != null)
             {
                 bool switchVisible = inside && cells[cell.x, cell.y] == CellKind.SignalSwitch;
-                signalSwitchButton.gameObject.SetActive(switchVisible);
+                SetVisible(signalSwitchButton, switchVisible);
                 if (switchVisible)
                 {
-                    Text label = signalSwitchButton.GetComponentInChildren<Text>();
-                    if (label != null)
-                    {
-                        label.text = automationSwitchState[cell.x, cell.y] ? "Switch\nON" : "Switch\nOFF";
-                    }
+                    signalSwitchButton.text = Localize(automationSwitchState[cell.x, cell.y] ? "Switch\nON" : "Switch\nOFF");
                 }
             }
 
             if (airlockToggleButton != null)
             {
                 bool airlockVisible = inside && cells[cell.x, cell.y] == CellKind.ManualAirlock;
-                airlockToggleButton.gameObject.SetActive(airlockVisible);
+                SetVisible(airlockToggleButton, airlockVisible);
                 if (airlockVisible)
                 {
-                    Text label = airlockToggleButton.GetComponentInChildren<Text>();
-                    if (label != null)
-                    {
-                        label.text = airlockOpen[cell.x, cell.y] ? "Door\nOPEN" : "Door\nCLOSED";
-                    }
+                    airlockToggleButton.text = Localize(airlockOpen[cell.x, cell.y] ? "Door\nOPEN" : "Door\nCLOSED");
                 }
             }
         }
@@ -3130,6 +3334,17 @@ namespace ProjectON
         {
             paused = !paused;
             Log(paused ? "Simulation paused." : "Simulation resumed.");
+        }
+
+        private void ContinueFreeplay()
+        {
+            if (colonyVictory && !colonyFailed)
+            {
+                colonyVictoryAcknowledged = true;
+                paused = false;
+                Log("Freeplay continues.");
+                SetVisible(endStatePanel, false);
+            }
         }
 
         private void CycleSpeed()
@@ -3377,6 +3592,10 @@ namespace ProjectON
                 if (spec.Kind == CellKind.WaterPump)
                 {
                     Log("Water Pump must be built beside a water tile.");
+                }
+                else if (RequiresFloorSupport(spec.Kind))
+                {
+                    Log(spec.Label + " needs floor support.");
                 }
                 else if (spec.Kind == CellKind.LiquidPipeSensor || spec.Kind == CellKind.LiquidShutoff)
                 {
@@ -3748,7 +3967,7 @@ namespace ProjectON
                 return false;
             }
 
-            if (buildKind == CellKind.Planter && cell.y > 0 && cells[cell.x, cell.y - 1] == CellKind.Empty)
+            if (RequiresFloorSupport(buildKind) && !HasFloorSupport(cell))
             {
                 return false;
             }
@@ -3769,6 +3988,26 @@ namespace ProjectON
             }
 
             return true;
+        }
+
+        private bool RequiresFloorSupport(CellKind buildKind)
+        {
+            return buildKind == CellKind.Planter ||
+                buildKind == CellKind.DecorPlant;
+        }
+
+        private bool HasFloorSupport(Vector2Int cell)
+        {
+            if (cell.y <= 0)
+            {
+                return true;
+            }
+
+            CellKind below = cells[cell.x, cell.y - 1];
+            return IsSolidTile(below) ||
+                below == CellKind.Floor ||
+                below == CellKind.ManualAirlock ||
+                below == CellKind.BunkerDoor;
         }
 
         private void CancelJobsAt(Vector2Int cell, bool forceLog)
@@ -4236,7 +4475,7 @@ namespace ProjectON
             for (int i = 0; i < offsets.Length; i++)
             {
                 Vector2Int candidate = center + offsets[i];
-                if (IsInside(candidate.x, candidate.y) && IsPassable(candidate.x, candidate.y) && WorkerAt(candidate) == null)
+                if (IsCharacterStandableCell(candidate) && WorkerAt(candidate) == null)
                 {
                     spawnCell = candidate;
                     return true;
@@ -4244,6 +4483,35 @@ namespace ProjectON
             }
 
             spawnCell = Vector2Int.zero;
+            return false;
+        }
+
+        private bool TryFindCharacterStandableCellNear(Vector2Int center, int radius, Worker ignoreWorker, out Vector2Int standableCell)
+        {
+            for (int distance = 0; distance <= radius; distance++)
+            {
+                for (int dy = -distance; dy <= distance; dy++)
+                {
+                    int dxLimit = distance - Mathf.Abs(dy);
+                    for (int dx = -dxLimit; dx <= dxLimit; dx++)
+                    {
+                        if (Mathf.Abs(dx) + Mathf.Abs(dy) != distance)
+                        {
+                            continue;
+                        }
+
+                        Vector2Int candidate = center + new Vector2Int(dx, dy);
+                        Worker occupant = WorkerAt(candidate);
+                        if (IsCharacterStandableCell(candidate) && (occupant == null || occupant == ignoreWorker))
+                        {
+                            standableCell = candidate;
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            standableCell = Vector2Int.zero;
             return false;
         }
 
@@ -7973,7 +8241,7 @@ namespace ProjectON
 
         private bool CanTraversePathStep(Vector2Int from, Vector2Int to)
         {
-            if (!IsInside(to.x, to.y) || !IsPassable(to.x, to.y))
+            if (!CanCharacterTraversePathStep(from, to))
             {
                 return false;
             }
@@ -7988,7 +8256,7 @@ namespace ProjectON
 
         private bool CanWorkerTraversePathStep(Worker worker, Vector2Int from, Vector2Int to)
         {
-            if (!IsInside(to.x, to.y) || !IsPassable(to.x, to.y))
+            if (!CanCharacterTraversePathStep(from, to))
             {
                 return false;
             }
@@ -8004,6 +8272,120 @@ namespace ProjectON
             }
 
             return true;
+        }
+
+        private bool CanCharacterTraversePathStep(Vector2Int from, Vector2Int to)
+        {
+            if (!IsCharacterPathCell(to, from))
+            {
+                return false;
+            }
+
+            int dx = Mathf.Abs(to.x - from.x);
+            int dy = Mathf.Abs(to.y - from.y);
+            if (dx + dy != 1)
+            {
+                return false;
+            }
+
+            if (dy > 0 && !CanCharacterMoveVertically(from, to))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool IsCharacterStandableCell(Vector2Int cell)
+        {
+            return IsCharacterPathCell(cell, new Vector2Int(-1, -1));
+        }
+
+        private bool IsCharacterPathCell(Vector2Int cell, Vector2Int from)
+        {
+            if (!IsInside(cell.x, cell.y) || !IsPassable(cell.x, cell.y))
+            {
+                return false;
+            }
+
+            CellKind kind = cells[cell.x, cell.y];
+            if (kind == CellKind.Ladder || kind == CellKind.Floor)
+            {
+                return true;
+            }
+
+            if (kind == CellKind.ManualAirlock)
+            {
+                return airlockOpen[cell.x, cell.y];
+            }
+
+            if (kind == CellKind.BunkerDoor)
+            {
+                return !IsBunkerDoorClosed(cell);
+            }
+
+            if (kind == CellKind.Empty)
+            {
+                return HasCharacterFloorSupport(cell) || IsCharacterLadderCell(from);
+            }
+
+            return HasCharacterFloorSupport(cell) || IsCharacterSpecialStructure(cell);
+        }
+
+        private bool CanCharacterMoveVertically(Vector2Int from, Vector2Int to)
+        {
+            return IsCharacterLadderCell(from) ||
+                IsCharacterLadderCell(to) ||
+                IsCharacterSpecialStructure(from) ||
+                IsCharacterSpecialStructure(to);
+        }
+
+        private bool IsCharacterLadderCell(Vector2Int cell)
+        {
+            return IsInside(cell.x, cell.y) && cells[cell.x, cell.y] == CellKind.Ladder;
+        }
+
+        private bool IsCharacterSpecialStructure(Vector2Int cell)
+        {
+            if (!IsInside(cell.x, cell.y))
+            {
+                return false;
+            }
+
+            CellKind kind = cells[cell.x, cell.y];
+            if (kind == CellKind.ManualAirlock)
+            {
+                return airlockOpen[cell.x, cell.y];
+            }
+
+            if (kind == CellKind.BunkerDoor)
+            {
+                return !IsBunkerDoorClosed(cell);
+            }
+
+            return false;
+        }
+
+        private bool HasCharacterFloorSupport(Vector2Int cell)
+        {
+            if (!IsInside(cell.x, cell.y))
+            {
+                return false;
+            }
+
+            if (cell.y <= 0)
+            {
+                return true;
+            }
+
+            Vector2Int belowCell = new Vector2Int(cell.x, cell.y - 1);
+            CellKind below = cells[belowCell.x, belowCell.y];
+            if (below == CellKind.Floor || IsSolidTile(below))
+            {
+                return true;
+            }
+
+            return IsCharacterSpecialStructure(belowCell);
         }
 
         private void DenySuitCheckpointEntry(Worker worker, Vector2Int checkpoint)
@@ -12865,6 +13247,82 @@ namespace ProjectON
             return TryFindPath(start, targets, out path);
         }
 
+        private int CountUnreachableJobs()
+        {
+            int count = 0;
+            foreach (Job job in jobs)
+            {
+                if (job.AssignedWorker != null || !IsJobValid(job))
+                {
+                    continue;
+                }
+
+                if (!CanAnyActiveWorkerReachJob(job, out _))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private bool CanAnyActiveWorkerReachJob(Job job, out int shortestPath)
+        {
+            shortestPath = int.MaxValue;
+            foreach (Worker worker in workers)
+            {
+                if (worker.Health <= 0f || !CanWorkerTakeJob(worker, job))
+                {
+                    continue;
+                }
+
+                if (TryFindPathToJob(worker.Cell, job, out List<Vector2Int> path))
+                {
+                    shortestPath = Mathf.Min(shortestPath, path.Count);
+                }
+            }
+
+            return shortestPath < int.MaxValue;
+        }
+
+        private string JobReachabilityText(Job job)
+        {
+            if (job == null)
+            {
+                return string.Empty;
+            }
+
+            if (job.AssignedWorker != null)
+            {
+                return "Assigned to " + job.AssignedWorker.Name + ".";
+            }
+
+            if (!IsJobValid(job))
+            {
+                return "Job invalid: target changed or resources missing.";
+            }
+
+            List<Vector2Int> workPositions = GetWorkPositions(job);
+            if (workPositions.Count == 0)
+            {
+                return "Job blocked: no standable work cell. Build floor/ladder access.";
+            }
+
+            if (CountActiveWorkers() == 0)
+            {
+                return "Job blocked: no active duplicants.";
+            }
+
+            if (CanAnyActiveWorkerReachJob(job, out int shortestPath))
+            {
+                return "Job reachable: " + shortestPath + " steps.";
+            }
+
+            return string.IsNullOrEmpty(job.TargetWorkerName)
+                ? "Job unreachable: build ladder/floor/door access to a work cell."
+                : "Job blocked: assigned duplicant is unavailable.";
+        }
+
         private List<Vector2Int> GetWorkPositions(Job job)
         {
             List<Vector2Int> targets = new List<Vector2Int>();
@@ -12903,7 +13361,7 @@ namespace ProjectON
 
         private void AddPassableTarget(List<Vector2Int> targets, int x, int y)
         {
-            if (IsInside(x, y) && IsPassable(x, y))
+            if (IsCharacterStandableCell(new Vector2Int(x, y)))
             {
                 targets.Add(new Vector2Int(x, y));
             }
@@ -15298,6 +15756,7 @@ namespace ProjectON
 
         private void UpdateColonyStatus(bool force)
         {
+            int previousScenarioMilestones = CountCompletedScenarioMilestones();
             ApplyResearchUnlocks(false);
             UpdatePoweredWires();
             UpdateAutomationWires();
@@ -15443,6 +15902,13 @@ namespace ProjectON
             milestoneSkilledLabor |= highestSkillLevel >= 3;
             milestoneDecorComfort |= decorPlants >= workers.Count && averageWorkerDecor >= 0.35f;
             milestoneCycleFive |= cycle >= 5 && CountActiveWorkers() > 0;
+            unreachableJobCount = CountUnreachableJobs();
+
+            int completedScenarioMilestones = CountCompletedScenarioMilestones();
+            if (!force && completedScenarioMilestones > previousScenarioMilestones)
+            {
+                GrantCharterMilestoneRewards(previousScenarioMilestones, completedScenarioMilestones);
+            }
 
             bool wasVictory = colonyVictory;
             colonyVictory = milestoneBasicShelter &&
@@ -16000,7 +16466,7 @@ namespace ProjectON
                 objectiveText = "Survive until cycle 5 with at least one active duplicant.";
             }
 
-            alertText = BuildAlertText(averageOxygen, averagePollutedOxygen, averageHydrogen, averageNaturalGas, averageTemperature, unsafeTemperatureTiles, unwiredPowerBuildings, overloadedWires, MaxPowerWireLoad(), maxWorkerGermExposure);
+            alertText = BuildAlertText(averageOxygen, averagePollutedOxygen, averageHydrogen, averageNaturalGas, averageTemperature, unsafeTemperatureTiles, unwiredPowerBuildings, overloadedWires, MaxPowerWireLoad(), maxWorkerGermExposure, unreachableJobCount);
         }
 
         private void ApplyResearchUnlocks(bool announce)
@@ -16034,17 +16500,22 @@ namespace ProjectON
             }
         }
 
-        private string BuildAlertText(float averageOxygen, float averagePollutedOxygen, float averageHydrogen, float averageNaturalGas, float averageTemperature, int unsafeTemperatureTiles, int unwiredPowerBuildings, int overloadedWires, float maxWireLoad, float maxWorkerGermExposure)
+        private string BuildAlertText(float averageOxygen, float averagePollutedOxygen, float averageHydrogen, float averageNaturalGas, float averageTemperature, int unsafeTemperatureTiles, int unwiredPowerBuildings, int overloadedWires, float maxWireLoad, float maxWorkerGermExposure, int unreachableJobs)
         {
             if (colonyFailed)
             {
-                return "Colony failed. Load a save or start a new run from the editor.";
+                return "Colony failed. Load a save or start a new run.";
             }
 
             StringBuilder builder = new StringBuilder();
             if (averageOxygen < 0.18f)
             {
                 AppendAlert(builder, "low oxygen");
+            }
+
+            if (unreachableJobs > 0)
+            {
+                AppendAlert(builder, unreachableJobs + " unreachable jobs");
             }
 
             if (AnyWorkerNeedsRescue())
@@ -17402,6 +17873,7 @@ namespace ProjectON
                 cycle = cycle,
                 currentMode = (int)currentMode,
                 currentOverlayMode = (int)currentOverlayMode,
+                language = currentLanguage.ToString(),
                 milestoneBasicShelter = milestoneBasicShelter,
                 milestoneStableOxygen = milestoneStableOxygen,
                 milestoneFoodProduction = milestoneFoodProduction,
@@ -17943,6 +18415,7 @@ namespace ProjectON
             techFoodPreparation = data.techFoodPreparation;
             techPowerRegulation = data.techPowerRegulation;
             colonyVictory = data.colonyVictory;
+            colonyVictoryAcknowledged = false;
             colonyFailed = data.colonyFailed;
             paused = colonyFailed;
             InvalidateRooms();
@@ -18013,6 +18486,14 @@ namespace ProjectON
                     worker.SuitEquipped = data.version >= 39 && workerSave.suitEquipped;
                     worker.WorkSpeed = WorkerSkillSpeedMultiplier(worker);
                     worker.Activity = worker.Health <= 0f ? "Incapacitated" : worker.StressBreakSeconds > 0f ? "Stress Break" : "Idle";
+                    if (!IsCharacterStandableCell(worker.Cell) && TryFindCharacterStandableCellNear(worker.Cell, 10, worker, out Vector2Int safeWorkerCell))
+                    {
+                        worker.Cell = safeWorkerCell;
+                        if (worker.Transform != null)
+                        {
+                            worker.Transform.position = CellCenter(safeWorkerCell);
+                        }
+                    }
                 }
             }
 
@@ -18094,6 +18575,12 @@ namespace ProjectON
 
             int modeMax = Enum.GetValues(typeof(CommandMode)).Length - 1;
             currentMode = (CommandMode)Mathf.Clamp(data.currentMode, 0, modeMax);
+            if (!string.IsNullOrEmpty(data.language) && Enum.TryParse(data.language, out ProjectONLanguage savedLanguage))
+            {
+                currentLanguage = savedLanguage;
+            }
+
+            RefreshLocalizedStaticTexts();
             SetMode(currentMode);
             int overlayModeMax = Enum.GetValues(typeof(OverlayMode)).Length - 1;
             currentOverlayMode = (OverlayMode)Mathf.Clamp(data.currentOverlayMode, 0, overlayModeMax);
@@ -18195,7 +18682,7 @@ namespace ProjectON
                 }
             }
 
-            statsText.text =
+            string hudText =
                 "Cycle " + cycle + "  " + (paused ? "PAUSED" : "x" + simulationSpeed.ToString("0")) +
                 "  Schedule " + ScheduleLabel() +
                 "    O2 " + averageOxygen.ToString("0.00") +
@@ -18277,28 +18764,529 @@ namespace ProjectON
                 "    Jobs " + assignedJobs + "/" + jobs.Count + " (" + openJobs + " open)" +
                 "\nObjective: " + objectiveText + "    Tech: " + TechSummary() + "    Alerts: " + alertText;
 
-            modeText.text = "Mode: " + ModeName(currentMode) + "    Overlay: " + OverlayName(currentOverlayMode) + "    Rooms: " + RoomSummary() + "    Workers: " + WorkerSummary();
-            logText.text = lastLog;
-            infoText.text = BuildInspectText();
+            hudText = BuildTopStatusText(averageOxygen, averageCo2, averageTemperature, assignedJobs, openJobs);
+            statsText.text = Localize(hudText);
+            modeText.text = Localize(BuildModeStatusText());
+            if (scenarioText != null)
+            {
+                scenarioText.text = Localize(BuildScenarioText());
+            }
+
+            UpdateOverlayLegend();
+            logText.text = Localize(lastLog);
+            infoText.text = Localize(BuildInspectText());
             UpdateInspectControls();
+            UpdateEndStatePanel();
+        }
+
+        private void UpdateOverlayLegend()
+        {
+            if (overlayLegendRows == null || overlayLegendTitleText == null)
+            {
+                return;
+            }
+
+            if (renderedLegendOverlayMode == currentOverlayMode && renderedLegendLanguage == currentLanguage)
+            {
+                return;
+            }
+
+            renderedLegendOverlayMode = currentOverlayMode;
+            renderedLegendLanguage = currentLanguage;
+            overlayLegendRows.Clear();
+            overlayLegendTitleText.text = Localize("Legend: " + OverlayName(currentOverlayMode));
+
+            switch (currentOverlayMode)
+            {
+                case OverlayMode.Temperature:
+                    AddOverlayLegendRow(new Color(0.18f, 0.58f, 1f, 0.90f), "Cold");
+                    AddOverlayLegendRow(new Color(0.20f, 1f, 0.55f, 0.45f), "Comfort");
+                    AddOverlayLegendRow(new Color(1f, 0.16f, 0.04f, 0.90f), "Hot");
+                    AddOverlayLegendRow(new Color(1f, 0.72f, 0.20f, 0.90f), "Steam risk");
+                    break;
+                case OverlayMode.Power:
+                    AddOverlayLegendRow(new Color(1f, 0.86f, 0.18f, 0.90f), "Powered wire");
+                    AddOverlayLegendRow(new Color(0.52f, 0.30f, 0.08f, 0.90f), "Unpowered wire");
+                    AddOverlayLegendRow(new Color(1f, 0.14f, 0.04f, 0.95f), "Overload");
+                    AddOverlayLegendRow(new Color(0.35f, 1f, 0.44f, 0.80f), "Machine running");
+                    break;
+                case OverlayMode.Germs:
+                    AddOverlayLegendRow(new Color(0.20f, 1f, 0.18f, 0.45f), "Low germs");
+                    AddOverlayLegendRow(new Color(0.58f, 1f, 0.18f, 0.75f), "High germs");
+                    AddOverlayLegendRow(new Color(0.28f, 1f, 0.32f, 0.75f), "Polluted oxygen");
+                    AddOverlayLegendRow(new Color(0f, 0f, 0f, 0.30f), "Clean tile");
+                    break;
+                case OverlayMode.Plumbing:
+                    AddOverlayLegendRow(new Color(0.08f, 0.78f, 1f, 0.85f), "Liquid pipe");
+                    AddOverlayLegendRow(new Color(0.10f, 0.86f, 1f, 0.85f), "Reservoir fill");
+                    AddOverlayLegendRow(new Color(0.26f, 1f, 0.38f, 0.85f), "Green sensor");
+                    AddOverlayLegendRow(new Color(1f, 0.20f, 0.12f, 0.85f), "Closed or blocked");
+                    break;
+                case OverlayMode.Ventilation:
+                    AddOverlayLegendRow(new Color(0.20f, 0.84f, 1f, 0.85f), "Oxygen pipe");
+                    AddOverlayLegendRow(new Color(0.86f, 0.36f, 1f, 0.85f), "Hydrogen pipe");
+                    AddOverlayLegendRow(new Color(1f, 0.58f, 0.14f, 0.85f), "Natural gas pipe");
+                    AddOverlayLegendRow(new Color(1f, 0.20f, 0.12f, 0.85f), "Closed or blocked");
+                    break;
+                case OverlayMode.Logistics:
+                    AddOverlayLegendRow(new Color(1f, 0.72f, 0.20f, 0.85f), "Shipping rail");
+                    AddOverlayLegendRow(new Color(1f, 0.72f, 0.20f, 0.85f), "Loader powered");
+                    AddOverlayLegendRow(new Color(1f, 0.22f, 0.12f, 0.85f), "Loader blocked");
+                    AddOverlayLegendRow(new Color(0.95f, 0.82f, 0.20f, 0.70f), "Auto-sweeper");
+                    break;
+                case OverlayMode.Decor:
+                    AddOverlayLegendRow(new Color(1f, 0.54f, 0.96f, 0.90f), "Decor source");
+                    AddOverlayLegendRow(new Color(0.92f, 0.58f, 1f, 0.65f), "Decor aura");
+                    AddOverlayLegendRow(new Color(0f, 0f, 0f, 0.30f), "No decor");
+                    AddOverlayLegendRow(new Color(0.62f, 1f, 0.78f, 0.75f), "Morale help");
+                    break;
+                case OverlayMode.Rooms:
+                    AddOverlayLegendRow(RoomKindColor(RoomKind.Barracks), "Barracks");
+                    AddOverlayLegendRow(RoomKindColor(RoomKind.MessHall), "Mess Hall");
+                    AddOverlayLegendRow(RoomKindColor(RoomKind.Washroom), "Washroom");
+                    AddOverlayLegendRow(RoomKindColor(RoomKind.MixedRoom), "Mixed Room");
+                    break;
+                default:
+                    AddOverlayLegendRow(new Color(0.20f, 0.72f, 1f, 0.85f), "Oxygen");
+                    AddOverlayLegendRow(new Color(0.85f, 0.34f, 0.16f, 0.85f), "Carbon dioxide");
+                    AddOverlayLegendRow(new Color(0.28f, 0.92f, 0.36f, 0.85f), "Polluted oxygen");
+                    AddOverlayLegendRow(new Color(0.82f, 0.38f, 1f, 0.85f), "Hydrogen");
+                    break;
+            }
+        }
+
+        private void AddOverlayLegendRow(Color color, string label)
+        {
+            VisualElement row = new VisualElement();
+            row.AddToClassList("overlay-legend-row");
+
+            VisualElement swatch = new VisualElement();
+            swatch.AddToClassList("overlay-legend-swatch");
+            swatch.style.backgroundColor = new StyleColor(color);
+            row.Add(swatch);
+
+            Label text = new Label(Localize(label));
+            text.AddToClassList("overlay-legend-label");
+            ApplyRuntimeFont(text);
+            row.Add(text);
+
+            overlayLegendRows.Add(row);
+        }
+
+        private void UpdateEndStatePanel()
+        {
+            if (endStatePanel == null)
+            {
+                return;
+            }
+
+            bool showFailure = colonyFailed;
+            bool showVictory = colonyVictory && !colonyVictoryAcknowledged;
+            bool showPanel = showFailure || showVictory;
+            SetVisible(endStatePanel, showPanel);
+            if (!showPanel)
+            {
+                return;
+            }
+
+            if (showFailure)
+            {
+                endStateTitleText.text = Localize("Colony failed");
+                endStateBodyText.text = Localize("All duplicants are incapacitated. Load a save or start a new run.");
+                SetVisible(endStateLoadButton, true);
+                SetVisible(endStateNewRunButton, true);
+                SetVisible(endStateContinueButton, false);
+            }
+            else
+            {
+                endStateTitleText.text = Localize("Colony Charter complete");
+                endStateBodyText.text = Localize("The colony charter is complete. Continue freeplay, load a save, or start a new run.");
+                SetVisible(endStateLoadButton, true);
+                SetVisible(endStateNewRunButton, true);
+                SetVisible(endStateContinueButton, true);
+            }
+        }
+
+        private string BuildTopStatusText(float averageOxygen, float averageCo2, float averageTemperature, int assignedJobs, int openJobs)
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.Append("Cycle ");
+            builder.Append(cycle);
+            builder.Append("  ");
+            builder.Append(paused ? "PAUSED" : "x" + simulationSpeed.ToString("0"));
+            builder.Append("  Schedule ");
+            builder.Append(ScheduleLabel());
+            builder.Append("    O2 ");
+            builder.Append(averageOxygen.ToString("0.00"));
+            builder.Append("  CO2 ");
+            builder.Append(averageCo2.ToString("0.00"));
+            builder.Append("  Temp ");
+            builder.Append(averageTemperature.ToString("0"));
+            builder.Append("C  Power ");
+            builder.Append(power.ToString("0"));
+            builder.Append("/");
+            builder.Append(maxPower.ToString("0"));
+            builder.AppendLine();
+            builder.Append("Food ");
+            builder.Append(food.ToString("0"));
+            builder.Append("  Water ");
+            builder.Append(water.ToString("0"));
+            builder.Append("  Algae ");
+            builder.Append(algae.ToString("0"));
+            builder.Append("  Metal ");
+            builder.Append(metal.ToString("0"));
+            builder.Append("  Stress ");
+            builder.Append(HighestStress().ToString("0"));
+            builder.Append("%  Jobs ");
+            builder.Append(assignedJobs);
+            builder.Append("/");
+            builder.Append(jobs.Count);
+            builder.Append(" (");
+            builder.Append(openJobs);
+            builder.Append(" open)  Alert: ");
+            if (unreachableJobCount > 0)
+            {
+                builder.Append("Blocked ");
+                builder.Append(unreachableJobCount);
+                builder.Append("  ");
+            }
+
+            builder.Append(CompactAlertText(alertText, 3));
+            return builder.ToString();
+        }
+
+        private string BuildModeStatusText()
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.Append("Mode: ");
+            builder.Append(ModeName(currentMode));
+            builder.Append("    Overlay: ");
+            builder.Append(OverlayName(currentOverlayMode));
+            builder.AppendLine();
+            builder.Append("Rooms: ");
+            builder.Append(RoomSummary());
+            builder.Append("    Tech: ");
+            builder.Append(TechSummary());
+            builder.AppendLine();
+            builder.Append("Workers: ");
+            builder.Append(CountActiveWorkers());
+            builder.Append("/");
+            builder.Append(workers.Count);
+            int incapacitated = CountIncapacitatedWorkers();
+            if (incapacitated > 0)
+            {
+                builder.Append("  Down ");
+                builder.Append(incapacitated);
+            }
+
+            int lowMorale = CountLowMoraleWorkers();
+            if (lowMorale > 0)
+            {
+                builder.Append("  Low morale ");
+                builder.Append(lowMorale);
+            }
+
+            return builder.ToString();
+        }
+
+        private string BuildScenarioText()
+        {
+            int completed = CountCompletedScenarioMilestones();
+            int percent = Mathf.RoundToInt(completed * 100f / ScenarioMilestoneTotal);
+            StringBuilder builder = new StringBuilder();
+            if (colonyFailed)
+            {
+                builder.AppendLine("Scenario: Colony failed");
+            }
+            else if (colonyVictory)
+            {
+                builder.AppendLine("Scenario: Colony Charter complete  " + completed + "/" + ScenarioMilestoneTotal + " (" + percent + "%)");
+            }
+            else
+            {
+                builder.AppendLine("Scenario: Colony Charter  " + completed + "/" + ScenarioMilestoneTotal + " (" + percent + "%)");
+            }
+
+            builder.AppendLine("Phase: " + ScenarioPhaseName(completed) + " - " + ScenarioPhaseGoal(completed));
+            builder.AppendLine("Next: " + objectiveText);
+            builder.Append("Critical: ");
+            builder.Append(CompactAlertText(alertText, 4));
+            return builder.ToString();
+        }
+
+        private string ScenarioPhaseName(int completedMilestones)
+        {
+            if (colonyVictory)
+            {
+                return "Freeplay";
+            }
+
+            if (completedMilestones < 12)
+            {
+                return "Survival";
+            }
+
+            if (completedMilestones < 24)
+            {
+                return "Base Systems";
+            }
+
+            if (completedMilestones < 36)
+            {
+                return "Industry";
+            }
+
+            if (completedMilestones < 47)
+            {
+                return "Automation";
+            }
+
+            return "Surface & Space";
+        }
+
+        private string ScenarioPhaseGoal(int completedMilestones)
+        {
+            if (colonyVictory)
+            {
+                return "Expand, optimize, and survive indefinitely.";
+            }
+
+            if (completedMilestones < 12)
+            {
+                return "Beds, toilets, oxygen, food, and water.";
+            }
+
+            if (completedMilestones < 24)
+            {
+                return "Research, rooms, morale, power, and storage.";
+            }
+
+            if (completedMilestones < 36)
+            {
+                return "Pipes, vents, suits, refining, and backup power.";
+            }
+
+            if (completedMilestones < 47)
+            {
+                return "Sensors, sweepers, shipping, ranching, and vents.";
+            }
+
+            return "Solar, steam, scanners, bunker doors, and final charter.";
+        }
+
+        private string CompactAlertText(string alerts, int maxAlerts)
+        {
+            if (string.IsNullOrEmpty(alerts))
+            {
+                return "Stable.";
+            }
+
+            string[] alertParts = alerts.Split(new[] { ", " }, StringSplitOptions.None);
+            if (alertParts.Length <= maxAlerts)
+            {
+                return alerts;
+            }
+
+            StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < maxAlerts; i++)
+            {
+                if (i > 0)
+                {
+                    builder.Append(", ");
+                }
+
+                builder.Append(alertParts[i]);
+            }
+
+            builder.Append(", +");
+            builder.Append(alertParts.Length - maxAlerts);
+            builder.Append(" more");
+            return builder.ToString();
+        }
+
+        private int CountCompletedScenarioMilestones()
+        {
+            int count = 0;
+            count += milestoneBasicShelter ? 1 : 0;
+            count += milestoneWaterSupply ? 1 : 0;
+            count += milestoneResearchProgram ? 1 : 0;
+            count += milestoneStableOxygen ? 1 : 0;
+            count += milestoneFoodPreparation ? 1 : 0;
+            count += milestoneFoodProduction ? 1 : 0;
+            count += milestoneCropTending ? 1 : 0;
+            count += milestonePowerBuffer ? 1 : 0;
+            count += milestonePowerGrid ? 1 : 0;
+            count += milestonePowerLoadManagement ? 1 : 0;
+            count += milestoneFuelPower ? 1 : 0;
+            count += milestoneHydrogenFiltering ? 1 : 0;
+            count += milestoneHydrogenPower ? 1 : 0;
+            count += milestoneMetalRefining ? 1 : 0;
+            count += milestoneAtmoSuits ? 1 : 0;
+            count += milestoneInsulation ? 1 : 0;
+            count += milestoneRoomPlanning ? 1 : 0;
+            count += milestoneReconfiguration ? 1 : 0;
+            count += milestoneColonyExpansion ? 1 : 0;
+            count += milestoneMaintenance ? 1 : 0;
+            count += milestoneEmergencyResponse ? 1 : 0;
+            count += milestoneResourceLogistics ? 1 : 0;
+            count += milestoneBottleEmptying ? 1 : 0;
+            count += milestoneAutomation ? 1 : 0;
+            count += milestoneSignalSwitching ? 1 : 0;
+            count += milestoneAutoSweeping ? 1 : 0;
+            count += milestoneShippingLogistics ? 1 : 0;
+            count += milestoneConduitAutomation ? 1 : 0;
+            count += milestoneRenewableVents ? 1 : 0;
+            count += milestoneSteamPower ? 1 : 0;
+            count += milestoneSolarPower ? 1 : 0;
+            count += milestoneMeteorShielding ? 1 : 0;
+            count += milestoneSpaceScanning ? 1 : 0;
+            count += milestoneRanching ? 1 : 0;
+            count += milestoneThermalControl ? 1 : 0;
+            count += milestoneSanitation ? 1 : 0;
+            count += milestoneHygiene ? 1 : 0;
+            count += milestoneWasteProcessing ? 1 : 0;
+            count += milestoneMoraleCare ? 1 : 0;
+            count += milestonePressureControl ? 1 : 0;
+            count += milestoneAirlockControl ? 1 : 0;
+            count += milestoneFoodStorage ? 1 : 0;
+            count += milestoneMaterialStorage ? 1 : 0;
+            count += milestonePlumbing ? 1 : 0;
+            count += milestoneSpillCleanup ? 1 : 0;
+            count += milestoneVentilation ? 1 : 0;
+            count += milestoneReservoirBuffering ? 1 : 0;
+            count += milestoneAdvancedAtmosphere ? 1 : 0;
+            count += milestoneWaterRecycling ? 1 : 0;
+            count += milestoneDining ? 1 : 0;
+            count += milestoneSkilledLabor ? 1 : 0;
+            count += milestoneDecorComfort ? 1 : 0;
+            count += milestoneCycleFive ? 1 : 0;
+            return count;
+        }
+
+        private void GrantCharterMilestoneRewards(int previousCount, int nextCount)
+        {
+            int completed = Mathf.Max(0, nextCount - previousCount);
+            if (completed <= 0)
+            {
+                return;
+            }
+
+            float foodReward = workers.Count * 35f * completed;
+            float waterReward = 2.5f * completed;
+            float dirtReward = 5f * completed;
+            float metalReward = 3.5f * completed;
+            float algaeReward = 0f;
+            float coalReward = 0f;
+            float refinedMetalReward = 0f;
+            float researchReward = 0f;
+            float powerCapacityReward = 0f;
+
+            if (CrossedScenarioMilestone(previousCount, nextCount, 12))
+            {
+                foodReward += workers.Count * 80f;
+                waterReward += 30f;
+                algaeReward += 25f;
+            }
+
+            if (CrossedScenarioMilestone(previousCount, nextCount, 24))
+            {
+                metalReward += 25f;
+                researchReward += 2f;
+                powerCapacityReward += 25f;
+            }
+
+            if (CrossedScenarioMilestone(previousCount, nextCount, 36))
+            {
+                coalReward += 35f;
+                refinedMetalReward += 12f;
+            }
+
+            if (CrossedScenarioMilestone(previousCount, nextCount, 47))
+            {
+                waterReward += 40f;
+                refinedMetalReward += 18f;
+                powerCapacityReward += 25f;
+            }
+
+            if (CrossedScenarioMilestone(previousCount, nextCount, ScenarioMilestoneTotal))
+            {
+                foodReward += workers.Count * 300f;
+                waterReward += 75f;
+                refinedMetalReward += 30f;
+            }
+
+            food += foodReward;
+            water += waterReward;
+            dirt += dirtReward;
+            metal += metalReward;
+            algae += algaeReward;
+            coal += coalReward;
+            refinedMetal += refinedMetalReward;
+            researchPoints += researchReward;
+            maxPower += powerCapacityReward;
+
+            if (researchReward > 0f)
+            {
+                ApplyResearchUnlocks(true);
+            }
+
+            overlayDirty = true;
+            StringBuilder builder = new StringBuilder();
+            builder.Append("Charter milestone reward delivered: ");
+            bool hasReward = false;
+            AppendReward(builder, ref hasReward, foodReward, "food");
+            AppendReward(builder, ref hasReward, waterReward, "water");
+            AppendReward(builder, ref hasReward, dirtReward, "dirt");
+            AppendReward(builder, ref hasReward, metalReward, "metal");
+            AppendReward(builder, ref hasReward, algaeReward, "algae");
+            AppendReward(builder, ref hasReward, coalReward, "coal");
+            AppendReward(builder, ref hasReward, refinedMetalReward, "refined metal");
+            AppendReward(builder, ref hasReward, researchReward, "research");
+            AppendReward(builder, ref hasReward, powerCapacityReward, "power capacity");
+            builder.Append(" (");
+            builder.Append(nextCount);
+            builder.Append("/");
+            builder.Append(ScenarioMilestoneTotal);
+            builder.Append(").");
+            Log(builder.ToString());
+        }
+
+        private bool CrossedScenarioMilestone(int previousCount, int nextCount, int threshold)
+        {
+            return previousCount < threshold && nextCount >= threshold;
+        }
+
+        private void AppendReward(StringBuilder builder, ref bool hasReward, float amount, string label)
+        {
+            if (amount <= 0.01f)
+            {
+                return;
+            }
+
+            if (hasReward)
+            {
+                builder.Append(", ");
+            }
+
+            builder.Append("+");
+            builder.Append(amount >= 10f ? amount.ToString("0") : amount.ToString("0.0"));
+            builder.Append(" ");
+            builder.Append(label);
+            hasReward = true;
         }
 
         private void RefreshModeButtonLabels()
         {
             foreach (KeyValuePair<CommandMode, Button> pair in modeButtons)
             {
-                Text label = pair.Value.GetComponentInChildren<Text>();
-                if (label == null)
+                string nextLabel = Localize(ModeButtonLabel(pair.Key));
+                if (pair.Value.text != nextLabel)
                 {
-                    continue;
-                }
-
-                string nextLabel = ModeButtonLabel(pair.Key);
-                if (label.text != nextLabel)
-                {
-                    label.text = nextLabel;
+                    pair.Value.text = nextLabel;
                 }
             }
+
+            RefreshLanguageButtonLabel();
         }
 
         private string BuildInspectText()
@@ -19000,6 +19988,7 @@ namespace ProjectON
 
                 builder.AppendLine("Priority " + JobPriority(job));
                 builder.AppendLine("Progress " + Mathf.RoundToInt(job.Progress / job.WorkRequired * 100f) + "%");
+                builder.AppendLine(JobReachabilityText(job));
             }
 
             Worker worker = WorkerAt(cell);

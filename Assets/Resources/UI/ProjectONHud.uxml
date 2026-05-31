@@ -1,0 +1,64 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <ui:Style src="ProjectONHud.uss" />
+    <ui:VisualElement name="ProjectONHudRoot" class="projecton-hud-root">
+        <ui:VisualElement name="TopBar" class="hud-panel top-bar">
+            <ui:Label name="Stats" class="hud-label stats-text" />
+            <ui:Label name="Mode" class="hud-label mode-text" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="OverlayPanel" class="hud-panel overlay-panel">
+            <ui:VisualElement name="OverlayToolbar" class="toolbar-host" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="OverlayLegendPanel" class="hud-panel overlay-legend-panel">
+            <ui:Label name="OverlayLegendTitleText" class="hud-label overlay-legend-title" />
+            <ui:VisualElement name="OverlayLegendRows" class="overlay-legend-rows" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="SchedulePanel" class="hud-panel schedule-panel">
+            <ui:Button name="ScheduleStartDownButton" class="projecton-button schedule-button schedule-start-down" />
+            <ui:Button name="ScheduleStartUpButton" class="projecton-button schedule-button schedule-start-up" />
+            <ui:Button name="ScheduleWakeDownButton" class="projecton-button schedule-button schedule-wake-down" />
+            <ui:Button name="ScheduleWakeUpButton" class="projecton-button schedule-button schedule-wake-up" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="LanguagePanel" class="hud-panel language-panel">
+            <ui:Button name="LanguageButton" class="projecton-button fill-button" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="ScenarioPanel" class="hud-panel scenario-panel">
+            <ui:Label name="ScenarioText" class="hud-label scenario-text" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="InspectPanel" class="hud-panel inspect-panel">
+            <ui:Label name="InspectText" class="hud-label inspect-text" />
+            <ui:Button name="PriorityDownButton" class="projecton-button inspect-button priority-down-button" />
+            <ui:Button name="PriorityUpButton" class="projecton-button inspect-button priority-up-button" />
+            <ui:VisualElement name="InspectActionSlot" class="inspect-action-slot">
+                <ui:Button name="CancelSelectedButton" class="projecton-button fill-button" />
+                <ui:Button name="SignalSwitchButton" class="projecton-button fill-button" />
+                <ui:Button name="AirlockToggleButton" class="projecton-button fill-button" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="CommandBar" class="hud-panel command-bar">
+            <ui:VisualElement name="CommandToolbar" class="toolbar-host" />
+            <ui:Button name="SaveButton" class="projecton-button action-button save-button" />
+            <ui:Button name="LoadButton" class="projecton-button action-button load-button" />
+            <ui:Button name="PauseButton" class="projecton-button action-button pause-button" />
+            <ui:Button name="SpeedButton" class="projecton-button action-button speed-button" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="EndStatePanel" class="hud-panel end-state-panel hidden">
+            <ui:Label name="EndStateTitleText" class="hud-label end-state-title" />
+            <ui:Label name="EndStateBodyText" class="hud-label end-state-body" />
+            <ui:Button name="EndStateLoadButton" class="projecton-button end-state-button end-state-load-button" />
+            <ui:Button name="EndStateNewRunButton" class="projecton-button end-state-button end-state-new-run-button" />
+            <ui:Button name="EndStateContinueButton" class="projecton-button end-state-button end-state-continue-button" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="LogPanel" class="hud-panel log-panel">
+            <ui:Label name="LogText" class="hud-label log-text" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
