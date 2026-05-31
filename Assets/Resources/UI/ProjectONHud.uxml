@@ -26,6 +26,10 @@
             <ui:Button name="LanguageButton" class="projecton-button fill-button" />
         </ui:VisualElement>
 
+        <ui:VisualElement name="JobQueuePanel" class="hud-panel job-queue-panel">
+            <ui:Label name="JobQueueText" class="hud-label job-queue-text" />
+        </ui:VisualElement>
+
         <ui:VisualElement name="ScenarioPanel" class="hud-panel scenario-panel">
             <ui:Label name="ScenarioText" class="hud-label scenario-text" />
         </ui:VisualElement>

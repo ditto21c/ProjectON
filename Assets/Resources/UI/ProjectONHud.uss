@@ -124,6 +124,26 @@
     background-color: rgba(4, 5, 6, 0.72);
 }
 
+.job-queue-panel {
+    left: 16px;
+    top: 96px;
+    width: 564px;
+    height: 132px;
+    background-color: rgba(5, 7, 9, 0.76);
+}
+
+.job-queue-text {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 8px;
+    bottom: 8px;
+    color: rgb(222, 234, 235);
+    font-size: 14px;
+    -unity-text-align: upper-left;
+    white-space: normal;
+}
+
 .scenario-panel {
     left: 16px;
     bottom: 198px;

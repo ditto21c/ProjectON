@@ -24,6 +24,7 @@ namespace ProjectON
         private const float DefaultSleepStartCycleTime = 0.72f;
         private const float DefaultSleepEndCycleTime = 0.06f;
         private const float ScheduleStep = 0.04f;
+        private const float JobQueueRefreshIntervalSeconds = 0.75f;
         private const float JobAgingPriorityStepSeconds = 55f;
         private const float JobAgingMaxSeconds = 180f;
         private const float BaseDryResourceCapacity = 300f;
@@ -406,6 +407,21 @@ namespace ProjectON
             TendCrop,
             BuildShippingRail,
             EmptyBottle
+        }
+
+        private enum JobCategory
+        {
+            Survival,
+            Construction,
+            LifeSupport,
+            FoodOps,
+            PowerOps,
+            ResearchOps,
+            Logistics,
+            Maintenance,
+            Industry,
+            Ranching,
+            MoraleCare
         }
 
         private readonly struct BuildSpec
@@ -898,6 +914,7 @@ namespace ProjectON
         private Label statsText;
         private Label modeText;
         private Label scenarioText;
+        private Label jobQueueText;
         private Label overlayLegendTitleText;
         private Label infoText;
         private Label logText;
@@ -919,6 +936,9 @@ namespace ProjectON
         private OverlayMode currentOverlayMode = OverlayMode.Gas;
         private OverlayMode renderedLegendOverlayMode = (OverlayMode)(-1);
         private ProjectONLanguage renderedLegendLanguage = (ProjectONLanguage)(-1);
+        private ProjectONLanguage renderedJobQueueLanguage = (ProjectONLanguage)(-1);
+        private float nextJobQueueRefreshTime = -1f;
+        private string jobQueueTextCache = string.Empty;
         private ProjectONLanguage currentLanguage = ProjectONLanguage.Korean;
         private Vector2Int? inspectedCell;
         private string lastLog = "Colony online.";
@@ -2551,6 +2571,7 @@ namespace ProjectON
             statsText = RequireElement<Label>("Stats");
             modeText = RequireElement<Label>("Mode");
             scenarioText = RequireElement<Label>("ScenarioText");
+            jobQueueText = RequireElement<Label>("JobQueueText");
             overlayLegendTitleText = RequireElement<Label>("OverlayLegendTitleText");
             overlayLegendRows = RequireElement<VisualElement>("OverlayLegendRows");
             infoText = RequireElement<Label>("InspectText");
@@ -2817,6 +2838,8 @@ namespace ProjectON
             RefreshModeButtonLabels();
             RefreshLanguageButtonLabel();
             renderedLegendOverlayMode = (OverlayMode)(-1);
+            renderedJobQueueLanguage = (ProjectONLanguage)(-1);
+            nextJobQueueRefreshTime = -1f;
             overlayDirty = true;
             UpdateHud();
         }
@@ -15785,6 +15808,275 @@ namespace ProjectON
             return text;
         }
 
+        private string BuildJobQueueText(int assignedJobs, int openJobs)
+        {
+            int categoryCount = Enum.GetValues(typeof(JobCategory)).Length;
+            int[] openByCategory = new int[categoryCount];
+            int[] assignedByCategory = new int[categoryCount];
+            int[] blockedByCategory = new int[categoryCount];
+            int blockedJobs = 0;
+            int invalidJobs = 0;
+            int activeWorkers = CountActiveWorkers();
+            Job oldestOpenJob = null;
+            Job highestPriorityOpenJob = null;
+            int highestPriority = int.MinValue;
+
+            foreach (Job job in jobs)
+            {
+                int categoryIndex = (int)JobCategoryFor(job.Type);
+                if (job.AssignedWorker != null)
+                {
+                    assignedByCategory[categoryIndex]++;
+                    continue;
+                }
+
+                openByCategory[categoryIndex]++;
+                if (!IsJobValid(job))
+                {
+                    invalidJobs++;
+                    blockedJobs++;
+                    blockedByCategory[categoryIndex]++;
+                    continue;
+                }
+
+                if (!CanAnyActiveWorkerReachJob(job, out _))
+                {
+                    blockedJobs++;
+                    blockedByCategory[categoryIndex]++;
+                }
+
+                if (oldestOpenJob == null || job.AgeSeconds > oldestOpenJob.AgeSeconds)
+                {
+                    oldestOpenJob = job;
+                }
+
+                int effectivePriority = EffectiveJobPriority(job);
+                if (highestPriorityOpenJob == null ||
+                    effectivePriority > highestPriority ||
+                    (effectivePriority == highestPriority && job.AgeSeconds > highestPriorityOpenJob.AgeSeconds))
+                {
+                    highestPriorityOpenJob = job;
+                    highestPriority = effectivePriority;
+                }
+            }
+
+            int reachableJobs = Mathf.Max(0, openJobs - blockedJobs);
+            StringBuilder builder = new StringBuilder();
+            builder.Append("Errands ");
+            builder.Append(assignedJobs);
+            builder.Append("/");
+            builder.Append(jobs.Count);
+            builder.Append("  Active ");
+            builder.Append(activeWorkers);
+            builder.AppendLine();
+            builder.Append("Open ");
+            builder.Append(openJobs);
+            builder.Append("  Reachable ");
+            builder.Append(reachableJobs);
+            builder.Append("  Blocked ");
+            builder.Append(blockedJobs);
+            builder.Append("  Assigned ");
+            builder.Append(assignedJobs);
+            if (invalidJobs > 0)
+            {
+                builder.Append("  Invalid ");
+                builder.Append(invalidJobs);
+            }
+
+            builder.AppendLine();
+            builder.Append("Focus: ");
+            builder.Append(BuildJobQueueFocusText(openJobs, assignedJobs, blockedJobs, invalidJobs, activeWorkers, highestPriorityOpenJob));
+            builder.AppendLine();
+            builder.Append("Categories (open/assigned/blocked): ");
+            builder.Append(TopJobCategorySummary(openByCategory, assignedByCategory, blockedByCategory));
+
+            if (oldestOpenJob != null)
+            {
+                builder.AppendLine();
+                builder.Append("Oldest: ");
+                builder.Append(JobLabel(oldestOpenJob));
+                builder.Append("  ");
+                builder.Append(JobWaitText(oldestOpenJob));
+            }
+            else if (jobs.Count == 0)
+            {
+                builder.AppendLine();
+                builder.Append("No queued errands. Use Dig/Build/Operate commands to create work.");
+            }
+
+            return builder.ToString();
+        }
+
+        private string BuildJobQueueFocusText(
+            int openJobs,
+            int assignedJobs,
+            int blockedJobs,
+            int invalidJobs,
+            int activeWorkers,
+            Job highestPriorityOpenJob)
+        {
+            if (activeWorkers == 0)
+            {
+                return "No active duplicants.";
+            }
+
+            if (invalidJobs > 0)
+            {
+                return "Invalid jobs need cancellation.";
+            }
+
+            if (blockedJobs > 0)
+            {
+                return "Build access to blocked work cells.";
+            }
+
+            if (openJobs == 0 && assignedJobs == 0)
+            {
+                return "No queued errands.";
+            }
+
+            if (openJobs == 0)
+            {
+                return "Duplicants are working.";
+            }
+
+            if (openJobs > Mathf.Max(1, activeWorkers) * 3)
+            {
+                return "Reduce backlog with priorities.";
+            }
+
+            if (highestPriorityOpenJob != null)
+            {
+                return JobCategoryName(JobCategoryFor(highestPriorityOpenJob.Type)) +
+                    " priority " +
+                    EffectiveJobPriority(highestPriorityOpenJob);
+            }
+
+            return "Duplicants are working.";
+        }
+
+        private string TopJobCategorySummary(int[] openByCategory, int[] assignedByCategory, int[] blockedByCategory)
+        {
+            bool[] used = new bool[openByCategory.Length];
+            StringBuilder builder = new StringBuilder();
+            int added = 0;
+
+            for (int slot = 0; slot < 4; slot++)
+            {
+                int bestIndex = -1;
+                int bestTotal = 0;
+                for (int i = 0; i < openByCategory.Length; i++)
+                {
+                    int total = openByCategory[i] + assignedByCategory[i] + blockedByCategory[i];
+                    if (!used[i] && total > bestTotal)
+                    {
+                        bestIndex = i;
+                        bestTotal = total;
+                    }
+                }
+
+                if (bestIndex < 0)
+                {
+                    break;
+                }
+
+                if (added > 0)
+                {
+                    builder.Append(" | ");
+                }
+
+                used[bestIndex] = true;
+                added++;
+                builder.Append(JobCategoryName((JobCategory)bestIndex));
+                builder.Append(" ");
+                builder.Append(openByCategory[bestIndex]);
+                builder.Append("/");
+                builder.Append(assignedByCategory[bestIndex]);
+                builder.Append("/");
+                builder.Append(blockedByCategory[bestIndex]);
+            }
+
+            return added == 0 ? "none" : builder.ToString();
+        }
+
+        private JobCategory JobCategoryFor(JobType type)
+        {
+            switch (type)
+            {
+                case JobType.Sleep:
+                case JobType.UseToilet:
+                case JobType.WashHands:
+                case JobType.Eat:
+                case JobType.Treat:
+                case JobType.Rescue:
+                    return JobCategory.Survival;
+                case JobType.Build:
+                case JobType.BuildWire:
+                case JobType.BuildAutomationWire:
+                case JobType.BuildPipe:
+                case JobType.BuildGasPipe:
+                case JobType.BuildShippingRail:
+                case JobType.Deconstruct:
+                    return JobCategory.Construction;
+                case JobType.PumpWater:
+                case JobType.EmptyBottle:
+                    return JobCategory.LifeSupport;
+                case JobType.Harvest:
+                case JobType.Cook:
+                case JobType.TendCrop:
+                    return JobCategory.FoodOps;
+                case JobType.OperateGenerator:
+                    return JobCategory.PowerOps;
+                case JobType.Research:
+                    return JobCategory.ResearchOps;
+                case JobType.Sweep:
+                    return JobCategory.Logistics;
+                case JobType.Mop:
+                case JobType.Repair:
+                case JobType.Compost:
+                    return JobCategory.Maintenance;
+                case JobType.RefineMetal:
+                    return JobCategory.Industry;
+                case JobType.GroomHatch:
+                    return JobCategory.Ranching;
+                case JobType.Relax:
+                    return JobCategory.MoraleCare;
+                default:
+                    return JobCategory.Logistics;
+            }
+        }
+
+        private string JobCategoryName(JobCategory category)
+        {
+            switch (category)
+            {
+                case JobCategory.Survival:
+                    return "Survival";
+                case JobCategory.Construction:
+                    return "Construction";
+                case JobCategory.LifeSupport:
+                    return "Life Support";
+                case JobCategory.FoodOps:
+                    return "Food Ops";
+                case JobCategory.PowerOps:
+                    return "Power Ops";
+                case JobCategory.ResearchOps:
+                    return "Research Ops";
+                case JobCategory.Logistics:
+                    return "Logistics";
+                case JobCategory.Maintenance:
+                    return "Maintenance";
+                case JobCategory.Industry:
+                    return "Industry";
+                case JobCategory.Ranching:
+                    return "Ranching";
+                case JobCategory.MoraleCare:
+                    return "Morale Care";
+                default:
+                    return category.ToString();
+            }
+        }
+
         private int DefaultPriority(JobType type)
         {
             switch (type)
@@ -18856,6 +19148,19 @@ namespace ProjectON
             if (scenarioText != null)
             {
                 scenarioText.text = Localize(BuildScenarioText());
+            }
+
+            if (jobQueueText != null)
+            {
+                float now = Time.unscaledTime;
+                if (now >= nextJobQueueRefreshTime || renderedJobQueueLanguage != currentLanguage || string.IsNullOrEmpty(jobQueueTextCache))
+                {
+                    jobQueueTextCache = Localize(BuildJobQueueText(assignedJobs, openJobs));
+                    renderedJobQueueLanguage = currentLanguage;
+                    nextJobQueueRefreshTime = now + JobQueueRefreshIntervalSeconds;
+                }
+
+                jobQueueText.text = jobQueueTextCache;
             }
 
             UpdateOverlayLegend();
