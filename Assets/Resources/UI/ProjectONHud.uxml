@@ -30,6 +30,15 @@
             <ui:Label name="JobQueueText" class="hud-label job-queue-text" />
         </ui:VisualElement>
 
+        <ui:VisualElement name="JobPolicyPanel" class="hud-panel job-policy-panel">
+            <ui:Label name="JobPolicyText" class="hud-label job-policy-text" />
+            <ui:Button name="JobPolicyPrevButton" class="projecton-button job-policy-button job-policy-prev-button" />
+            <ui:Button name="JobPolicyNextButton" class="projecton-button job-policy-button job-policy-next-button" />
+            <ui:Button name="JobPolicyDownButton" class="projecton-button job-policy-button job-policy-down-button" />
+            <ui:Button name="JobPolicyUpButton" class="projecton-button job-policy-button job-policy-up-button" />
+            <ui:Button name="JobPolicyResetButton" class="projecton-button job-policy-button job-policy-reset-button" />
+        </ui:VisualElement>
+
         <ui:VisualElement name="ScenarioPanel" class="hud-panel scenario-panel">
             <ui:Label name="ScenarioText" class="hud-label scenario-text" />
         </ui:VisualElement>

@@ -144,6 +144,53 @@
     white-space: normal;
 }
 
+.job-policy-panel {
+    left: 16px;
+    top: 236px;
+    width: 564px;
+    height: 96px;
+    background-color: rgba(5, 7, 9, 0.76);
+}
+
+.job-policy-text {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 8px;
+    height: 40px;
+    color: rgb(229, 235, 225);
+    font-size: 14px;
+    -unity-text-align: upper-left;
+    white-space: normal;
+}
+
+.job-policy-button {
+    top: 54px;
+    width: 100px;
+    height: 32px;
+    font-size: 12px;
+}
+
+.job-policy-prev-button {
+    left: 12px;
+}
+
+.job-policy-next-button {
+    left: 122px;
+}
+
+.job-policy-down-button {
+    left: 232px;
+}
+
+.job-policy-up-button {
+    left: 342px;
+}
+
+.job-policy-reset-button {
+    left: 452px;
+}
+
 .scenario-panel {
     left: 16px;
     bottom: 198px;

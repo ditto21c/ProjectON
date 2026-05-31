@@ -17,13 +17,15 @@ namespace ProjectON
         private const int WorldWidth = 80;
         private const int WorldHeight = 46;
         private const float CycleLengthSeconds = 120f;
-        private const int SaveVersion = 74;
+        private const int SaveVersion = 75;
         private const int ScenarioMilestoneTotal = 53;
         private const float AutosaveIntervalSeconds = 45f;
         private const float ObjectiveRefreshSeconds = 1f;
         private const float DefaultSleepStartCycleTime = 0.72f;
         private const float DefaultSleepEndCycleTime = 0.06f;
         private const float ScheduleStep = 0.04f;
+        private const int JobCategoryPriorityMin = -2;
+        private const int JobCategoryPriorityMax = 2;
         private const float JobQueueRefreshIntervalSeconds = 0.75f;
         private const float JobAgingPriorityStepSeconds = 55f;
         private const float JobAgingMaxSeconds = 180f;
@@ -655,6 +657,8 @@ namespace ProjectON
             public int cycle;
             public int currentMode;
             public int currentOverlayMode;
+            public int selectedJobCategory;
+            public int[] jobCategoryPriorityAdjustments;
             public bool milestoneBasicShelter;
             public bool milestoneStableOxygen;
             public bool milestoneFoodProduction;
@@ -915,9 +919,15 @@ namespace ProjectON
         private Label modeText;
         private Label scenarioText;
         private Label jobQueueText;
+        private Label jobPolicyText;
         private Label overlayLegendTitleText;
         private Label infoText;
         private Label logText;
+        private Button jobPolicyPrevButton;
+        private Button jobPolicyNextButton;
+        private Button jobPolicyDownButton;
+        private Button jobPolicyUpButton;
+        private Button jobPolicyResetButton;
         private Button priorityDownButton;
         private Button priorityUpButton;
         private Button cancelSelectedJobButton;
@@ -940,6 +950,8 @@ namespace ProjectON
         private float nextJobQueueRefreshTime = -1f;
         private string jobQueueTextCache = string.Empty;
         private ProjectONLanguage currentLanguage = ProjectONLanguage.Korean;
+        private JobCategory selectedJobCategory = JobCategory.Construction;
+        private int[] jobCategoryPriorityAdjustments = new int[11];
         private Vector2Int? inspectedCell;
         private string lastLog = "Colony online.";
         private string objectiveText = "Build beds, oxygen, power, and food production.";
@@ -1132,6 +1144,7 @@ namespace ProjectON
 
         private void Awake()
         {
+            EnsureJobCategoryPolicy();
             ConfigureCamera();
             CreateRenderLayers();
             GenerateWorld();
@@ -2330,6 +2343,7 @@ namespace ProjectON
             simulationSpeed = 1f;
             sleepStartCycleTime = DefaultSleepStartCycleTime;
             sleepEndCycleTime = DefaultSleepEndCycleTime;
+            ResetJobCategoryPolicies(false);
             techAirSystems = false;
             techFoodPreparation = false;
             techPowerRegulation = false;
@@ -2572,6 +2586,7 @@ namespace ProjectON
             modeText = RequireElement<Label>("Mode");
             scenarioText = RequireElement<Label>("ScenarioText");
             jobQueueText = RequireElement<Label>("JobQueueText");
+            jobPolicyText = RequireElement<Label>("JobPolicyText");
             overlayLegendTitleText = RequireElement<Label>("OverlayLegendTitleText");
             overlayLegendRows = RequireElement<VisualElement>("OverlayLegendRows");
             infoText = RequireElement<Label>("InspectText");
@@ -2592,6 +2607,11 @@ namespace ProjectON
             languageButton = RequireElement<Button>("LanguageButton");
             ConfigureButton(languageButton, LanguageButtonLabel(), ToggleLanguage);
 
+            jobPolicyPrevButton = RequireElement<Button>("JobPolicyPrevButton");
+            jobPolicyNextButton = RequireElement<Button>("JobPolicyNextButton");
+            jobPolicyDownButton = RequireElement<Button>("JobPolicyDownButton");
+            jobPolicyUpButton = RequireElement<Button>("JobPolicyUpButton");
+            jobPolicyResetButton = RequireElement<Button>("JobPolicyResetButton");
             priorityDownButton = RequireElement<Button>("PriorityDownButton");
             priorityUpButton = RequireElement<Button>("PriorityUpButton");
             cancelSelectedJobButton = RequireElement<Button>("CancelSelectedButton");
@@ -2609,6 +2629,11 @@ namespace ProjectON
             ConfigureButton(cancelSelectedJobButton, "Cancel\nDel", CancelInspectedJob);
             ConfigureButton(signalSwitchButton, "Switch\nOFF", ToggleInspectedSignalSwitch);
             ConfigureButton(airlockToggleButton, "Door\nOPEN", ToggleInspectedAirlock);
+            ConfigureButton(jobPolicyPrevButton, "Cat <", SelectPreviousJobCategory);
+            ConfigureButton(jobPolicyNextButton, "Cat >", SelectNextJobCategory);
+            ConfigureButton(jobPolicyDownButton, "Policy -", () => AdjustSelectedJobCategoryPriority(-1));
+            ConfigureButton(jobPolicyUpButton, "Policy +", () => AdjustSelectedJobCategoryPriority(1));
+            ConfigureButton(jobPolicyResetButton, "Reset", ResetJobCategoryPolicies);
             ConfigureButton(endStateLoadButton, "Load Save", () => LoadGame(false));
             ConfigureButton(endStateNewRunButton, "New Run", StartNewRun);
             ConfigureButton(endStateContinueButton, "Continue", ContinueFreeplay);
@@ -2863,6 +2888,102 @@ namespace ProjectON
             }
 
             languageButton.text = Localize(LanguageButtonLabel());
+        }
+
+        private void SelectPreviousJobCategory()
+        {
+            CycleSelectedJobCategory(-1);
+        }
+
+        private void SelectNextJobCategory()
+        {
+            CycleSelectedJobCategory(1);
+        }
+
+        private void CycleSelectedJobCategory(int direction)
+        {
+            EnsureJobCategoryPolicy();
+            int count = JobCategoryCount();
+            int selected = ((int)selectedJobCategory + direction) % count;
+            if (selected < 0)
+            {
+                selected += count;
+            }
+
+            selectedJobCategory = (JobCategory)selected;
+            InvalidateJobPolicyUi();
+            UpdateHud();
+        }
+
+        private void AdjustSelectedJobCategoryPriority(int delta)
+        {
+            EnsureJobCategoryPolicy();
+            int index = (int)selectedJobCategory;
+            int current = jobCategoryPriorityAdjustments[index];
+            int adjusted = Mathf.Clamp(current + delta, JobCategoryPriorityMin, JobCategoryPriorityMax);
+            if (adjusted == current)
+            {
+                return;
+            }
+
+            jobCategoryPriorityAdjustments[index] = adjusted;
+            Log("Labor policy " + JobCategoryName(selectedJobCategory) + " adjusted to " + JobCategoryPriorityLabel(adjusted) + ".");
+            InvalidateJobPolicyUi();
+            UpdateHud();
+        }
+
+        private void ResetJobCategoryPolicies()
+        {
+            ResetJobCategoryPolicies(true);
+        }
+
+        private void ResetJobCategoryPolicies(bool announce)
+        {
+            EnsureJobCategoryPolicy();
+            for (int i = 0; i < jobCategoryPriorityAdjustments.Length; i++)
+            {
+                jobCategoryPriorityAdjustments[i] = 0;
+            }
+
+            selectedJobCategory = JobCategory.Construction;
+            if (announce)
+            {
+                Log("Labor policies reset.");
+            }
+
+            InvalidateJobPolicyUi();
+        }
+
+        private void InvalidateJobPolicyUi()
+        {
+            nextJobQueueRefreshTime = -1f;
+            jobQueueTextCache = string.Empty;
+        }
+
+        private void EnsureJobCategoryPolicy()
+        {
+            int count = JobCategoryCount();
+            if (jobCategoryPriorityAdjustments == null || jobCategoryPriorityAdjustments.Length != count)
+            {
+                int[] previous = jobCategoryPriorityAdjustments;
+                jobCategoryPriorityAdjustments = new int[count];
+                if (previous != null)
+                {
+                    Array.Copy(previous, jobCategoryPriorityAdjustments, Mathf.Min(previous.Length, count));
+                }
+            }
+
+            for (int i = 0; i < jobCategoryPriorityAdjustments.Length; i++)
+            {
+                jobCategoryPriorityAdjustments[i] = Mathf.Clamp(jobCategoryPriorityAdjustments[i], JobCategoryPriorityMin, JobCategoryPriorityMax);
+            }
+
+            selectedJobCategory = (JobCategory)Mathf.Clamp((int)selectedJobCategory, 0, count - 1);
+        }
+
+        private int JobCategoryCount()
+        {
+            return Enum.GetValues(typeof(JobCategory)).Length;
         }
 
         private static void SetAbsolute(VisualElement element)
@@ -15783,7 +15904,7 @@ namespace ProjectON
 
         private int JobAssignmentScore(Job job, int pathLength)
         {
-            int score = EffectiveJobPriority(job) * 1000;
+            int score = DispatchJobPriority(job) * 1000;
             score -= Mathf.Max(0, pathLength) * 8;
             score -= Mathf.RoundToInt(job.Progress);
             score += Mathf.Min(220, Mathf.RoundToInt(job.AgeSeconds * 0.8f));
@@ -15805,11 +15926,68 @@ namespace ProjectON
                 text += "  Effective priority " + effectivePriority;
             }
 
+            int dispatchPriority = DispatchJobPriority(job);
+            if (dispatchPriority != effectivePriority)
+            {
+                text += "  Dispatch priority " + dispatchPriority;
+            }
+
             return text;
+        }
+
+        private int DispatchJobPriority(Job job)
+        {
+            if (job == null)
+            {
+                return 1;
+            }
+
+            int priority = EffectiveJobPriority(job) + JobCategoryPriorityAdjustment(JobCategoryFor(job.Type));
+            if (job.Type == JobType.Rescue || job.Type == JobType.Treat)
+            {
+                priority = Mathf.Max(priority, 9);
+            }
+
+            return Mathf.Clamp(priority, 1, 10);
+        }
+
+        private int JobCategoryPriorityAdjustment(JobCategory category)
+        {
+            int index = (int)category;
+            if (jobCategoryPriorityAdjustments == null || index < 0 || index >= jobCategoryPriorityAdjustments.Length)
+            {
+                return 0;
+            }
+
+            return Mathf.Clamp(jobCategoryPriorityAdjustments[index], JobCategoryPriorityMin, JobCategoryPriorityMax);
+        }
+
+        private string JobPolicyText(Job job)
+        {
+            if (job == null)
+            {
+                return string.Empty;
+            }
+
+            JobCategory category = JobCategoryFor(job.Type);
+            int adjustment = JobCategoryPriorityAdjustment(category);
+            if (adjustment == 0)
+            {
+                return string.Empty;
+            }
+
+            return "Policy " + JobCategoryName(category) + " " + JobCategoryPriorityLabel(adjustment) +
+                "  Dispatch priority " + DispatchJobPriority(job);
+        }
+
+        private string JobCategoryPriorityLabel(int adjustment)
+        {
+            return adjustment >= 0 ? "+" + adjustment : adjustment.ToString();
         }
 
         private string BuildJobQueueText(int assignedJobs, int openJobs)
         {
+            EnsureJobCategoryPolicy();
             int categoryCount = Enum.GetValues(typeof(JobCategory)).Length;
             int[] openByCategory = new int[categoryCount];
             int[] assignedByCategory = new int[categoryCount];
@@ -15850,7 +16028,7 @@ namespace ProjectON
                     oldestOpenJob = job;
                 }
 
-                int effectivePriority = EffectiveJobPriority(job);
+                int effectivePriority = DispatchJobPriority(job);
                 if (highestPriorityOpenJob == null ||
                     effectivePriority > highestPriority ||
                     (effectivePriority == highestPriority && job.AgeSeconds > highestPriorityOpenJob.AgeSeconds))
@@ -15898,11 +16076,6 @@ namespace ProjectON
                 builder.Append("  ");
                 builder.Append(JobWaitText(oldestOpenJob));
             }
-            else if (jobs.Count == 0)
-            {
-                builder.AppendLine();
-                builder.Append("No queued errands. Use Dig/Build/Operate commands to create work.");
-            }
 
             return builder.ToString();
         }
@@ -15949,10 +16122,52 @@ namespace ProjectON
             {
                 return JobCategoryName(JobCategoryFor(highestPriorityOpenJob.Type)) +
                     " priority " +
-                    EffectiveJobPriority(highestPriorityOpenJob);
+                    DispatchJobPriority(highestPriorityOpenJob);
             }
 
             return "Duplicants are working.";
+        }
+
+        private string BuildJobPolicyText()
+        {
+            EnsureJobCategoryPolicy();
+            StringBuilder builder = new StringBuilder();
+            int selectedAdjustment = JobCategoryPriorityAdjustment(selectedJobCategory);
+            builder.Append("Labor Policy ");
+            builder.Append(JobCategoryName(selectedJobCategory));
+            builder.Append(" ");
+            builder.Append(JobCategoryPriorityLabel(selectedAdjustment));
+            builder.AppendLine();
+            builder.Append("Active policies: ");
+            builder.Append(ActiveJobPolicySummary());
+            return builder.ToString();
+        }
+
+        private string ActiveJobPolicySummary()
+        {
+            EnsureJobCategoryPolicy();
+            StringBuilder builder = new StringBuilder();
+            int added = 0;
+            for (int i = 0; i < jobCategoryPriorityAdjustments.Length; i++)
+            {
+                int adjustment = JobCategoryPriorityAdjustment((JobCategory)i);
+                if (adjustment == 0)
+                {
+                    continue;
+                }
+
+                if (added > 0)
+                {
+                    builder.Append(" | ");
+                }
+
+                builder.Append(JobCategoryName((JobCategory)i));
+                builder.Append(" ");
+                builder.Append(JobCategoryPriorityLabel(adjustment));
+                added++;
+            }
+
+            return added == 0 ? "all neutral" : builder.ToString();
         }
 
         private string TopJobCategorySummary(int[] openByCategory, int[] assignedByCategory, int[] blockedByCategory)
@@ -15994,6 +16209,13 @@ namespace ProjectON
                 builder.Append(assignedByCategory[bestIndex]);
                 builder.Append("/");
                 builder.Append(blockedByCategory[bestIndex]);
+                int adjustment = JobCategoryPriorityAdjustment((JobCategory)bestIndex);
+                if (adjustment != 0)
+                {
+                    builder.Append("(");
+                    builder.Append(JobCategoryPriorityLabel(adjustment));
+                    builder.Append(")");
+                }
             }
 
             return added == 0 ? "none" : builder.ToString();
@@ -18138,6 +18360,7 @@ namespace ProjectON
         {
             EnsureWorldState();
             EnsureWorkerRecords();
+            EnsureJobCategoryPolicy();
             SaveData data = new SaveData
             {
                 version = SaveVersion,
@@ -18249,6 +18472,8 @@ namespace ProjectON
                 cycle = cycle,
                 currentMode = (int)currentMode,
                 currentOverlayMode = (int)currentOverlayMode,
+                selectedJobCategory = (int)selectedJobCategory,
+                jobCategoryPriorityAdjustments = CaptureJobCategoryPriorityAdjustments(),
                 language = currentLanguage.ToString(),
                 milestoneBasicShelter = milestoneBasicShelter,
                 milestoneStableOxygen = milestoneStableOxygen,
@@ -18488,6 +18713,27 @@ namespace ProjectON
             return data;
         }
 
+        private int[] CaptureJobCategoryPriorityAdjustments()
+        {
+            EnsureJobCategoryPolicy();
+            int[] adjustments = new int[jobCategoryPriorityAdjustments.Length];
+            Array.Copy(jobCategoryPriorityAdjustments, adjustments, adjustments.Length);
+            return adjustments;
+        }
+
+        private void ApplyJobCategoryPriorityAdjustments(int[] savedAdjustments, int savedSelectedCategory)
+        {
+            EnsureJobCategoryPolicy();
+            for (int i = 0; i < jobCategoryPriorityAdjustments.Length; i++)
+            {
+                int savedValue = savedAdjustments == null || i >= savedAdjustments.Length ? 0 : savedAdjustments[i];
+                jobCategoryPriorityAdjustments[i] = Mathf.Clamp(savedValue, JobCategoryPriorityMin, JobCategoryPriorityMax);
+            }
+
+            selectedJobCategory = (JobCategory)Mathf.Clamp(savedSelectedCategory, 0, jobCategoryPriorityAdjustments.Length - 1);
+            InvalidateJobPolicyUi();
+        }
+
         private void ApplySaveData(SaveData data)
         {
             EnsureWorkerRecords();
@@ -18684,6 +18930,9 @@ namespace ProjectON
             sleepStartCycleTime = data.version >= 10 ? NormalizeCycleTime(data.sleepStartCycleTime) : DefaultSleepStartCycleTime;
             sleepEndCycleTime = data.version >= 10 ? NormalizeCycleTime(data.sleepEndCycleTime) : DefaultSleepEndCycleTime;
             NormalizeSleepWindow();
+            ApplyJobCategoryPriorityAdjustments(
+                data.version >= 75 ? data.jobCategoryPriorityAdjustments : null,
+                data.version >= 75 ? data.selectedJobCategory : (int)JobCategory.Construction);
             cycle = Mathf.Max(1, data.cycle);
             autosaveTimer = 0f;
             objectiveTimer = 0f;
@@ -19161,6 +19410,11 @@ namespace ProjectON
                 }
 
                 jobQueueText.text = jobQueueTextCache;
+            }
+
+            if (jobPolicyText != null)
+            {
+                jobPolicyText.text = Localize(BuildJobPolicyText());
             }
 
             UpdateOverlayLegend();
@@ -20379,6 +20633,12 @@ namespace ProjectON
 
                 builder.AppendLine("Priority " + JobPriority(job));
                 builder.AppendLine(JobWaitText(job));
+                string jobPolicyTextLine = JobPolicyText(job);
+                if (!string.IsNullOrEmpty(jobPolicyTextLine))
+                {
+                    builder.AppendLine(jobPolicyTextLine);
+                }
+
                 builder.AppendLine("Progress " + Mathf.RoundToInt(job.Progress / job.WorkRequired * 100f) + "%");
                 builder.AppendLine(JobReachabilityText(job));
             }
