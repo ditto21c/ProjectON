@@ -8,53 +8,58 @@
 
 .hud-panel {
     position: absolute;
+    overflow: hidden;
+}
+
+.hud-label {
+    overflow: hidden;
 }
 
 .top-bar {
     left: 0;
     right: 0;
     top: 0;
-    height: 88px;
+    height: 78px;
     background-color: rgba(4, 5, 6, 0.88);
 }
 
 .stats-text {
     position: absolute;
-    left: 18px;
-    right: 36%;
-    top: 10px;
-    bottom: 10px;
+    left: 16px;
+    right: 42%;
+    top: 8px;
+    bottom: 8px;
     color: rgb(224, 237, 242);
-    font-size: 16px;
+    font-size: 14px;
     -unity-text-align: middle-left;
     white-space: normal;
 }
 
 .mode-text {
     position: absolute;
-    left: 65%;
-    right: 18px;
-    top: 8px;
-    bottom: 8px;
+    left: 60%;
+    right: 16px;
+    top: 7px;
+    bottom: 7px;
     color: rgb(255, 235, 173);
-    font-size: 14px;
+    font-size: 12px;
     -unity-text-align: middle-right;
     white-space: normal;
 }
 
 .overlay-panel {
-    left: 600px;
-    top: 96px;
+    left: 520px;
+    top: 84px;
     width: 620px;
-    height: 42px;
+    height: 68px;
     background-color: rgba(4, 5, 6, 0.72);
 }
 
 .overlay-legend-panel {
-    left: 600px;
-    top: 146px;
+    left: 520px;
+    top: 158px;
     width: 620px;
-    height: 78px;
+    height: 76px;
     background-color: rgba(4, 5, 6, 0.66);
 }
 
@@ -108,27 +113,66 @@
     -unity-text-align: middle-left;
 }
 
-.schedule-panel {
-    left: 1068px;
-    top: 96px;
-    width: 468px;
+.printing-pod-offer-panel {
+    left: 520px;
+    top: 242px;
+    width: 620px;
+    height: 110px;
+    background-color: rgba(7, 9, 10, 0.80);
+}
+
+.printing-pod-offer-text {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 8px;
+    height: 34px;
+    color: rgb(236, 238, 202);
+    font-size: 13px;
+    -unity-text-align: upper-left;
+    white-space: normal;
+}
+
+.printing-pod-offer-button {
+    top: 56px;
+    width: 188px;
     height: 42px;
+    font-size: 12px;
+}
+
+.printing-pod-offer-button-0 {
+    left: 12px;
+}
+
+.printing-pod-offer-button-1 {
+    left: 216px;
+}
+
+.printing-pod-offer-button-2 {
+    left: 420px;
+}
+
+.schedule-panel {
+    right: 176px;
+    top: 158px;
+    width: 468px;
+    height: 38px;
     background-color: rgba(4, 5, 6, 0.72);
 }
 
 .language-panel {
-    left: 1548px;
-    top: 96px;
+    right: 16px;
+    top: 158px;
     width: 144px;
-    height: 42px;
+    height: 38px;
     background-color: rgba(4, 5, 6, 0.72);
 }
 
 .job-queue-panel {
     left: 16px;
-    top: 96px;
-    width: 564px;
-    height: 132px;
+    top: 84px;
+    width: 496px;
+    height: 96px;
     background-color: rgba(5, 7, 9, 0.76);
 }
 
@@ -139,16 +183,16 @@
     top: 8px;
     bottom: 8px;
     color: rgb(222, 234, 235);
-    font-size: 14px;
+    font-size: 13px;
     -unity-text-align: upper-left;
     white-space: normal;
 }
 
 .job-policy-panel {
     left: 16px;
-    top: 236px;
-    width: 564px;
-    height: 96px;
+    top: 188px;
+    width: 496px;
+    height: 78px;
     background-color: rgba(5, 7, 9, 0.76);
 }
 
@@ -157,18 +201,18 @@
     left: 12px;
     right: 12px;
     top: 8px;
-    height: 40px;
+    height: 34px;
     color: rgb(229, 235, 225);
-    font-size: 14px;
+    font-size: 12px;
     -unity-text-align: upper-left;
     white-space: normal;
 }
 
 .job-policy-button {
-    top: 54px;
-    width: 100px;
-    height: 32px;
-    font-size: 12px;
+    top: 48px;
+    width: 88px;
+    height: 28px;
+    font-size: 11px;
 }
 
 .job-policy-prev-button {
@@ -176,26 +220,26 @@
 }
 
 .job-policy-next-button {
-    left: 122px;
+    left: 108px;
 }
 
 .job-policy-down-button {
-    left: 232px;
+    left: 204px;
 }
 
 .job-policy-up-button {
-    left: 342px;
+    left: 300px;
 }
 
 .job-policy-reset-button {
-    left: 452px;
+    left: 396px;
 }
 
 .crew-vitals-panel {
     left: 16px;
-    top: 340px;
-    width: 564px;
-    height: 224px;
+    top: 274px;
+    width: 496px;
+    height: 142px;
     background-color: rgba(5, 7, 9, 0.76);
 }
 
@@ -204,18 +248,18 @@
     left: 12px;
     right: 12px;
     top: 8px;
-    bottom: 46px;
+    bottom: 40px;
     color: rgb(223, 234, 236);
-    font-size: 13px;
+    font-size: 12px;
     -unity-text-align: upper-left;
     white-space: normal;
 }
 
 .crew-button {
-    bottom: 10px;
-    width: 128px;
-    height: 30px;
-    font-size: 12px;
+    bottom: 8px;
+    width: 84px;
+    height: 28px;
+    font-size: 11px;
 }
 
 .crew-prev-button {
@@ -223,19 +267,62 @@
 }
 
 .crew-next-button {
-    left: 150px;
+    left: 104px;
+}
+
+.crew-role-prev-button {
+    left: 196px;
+}
+
+.crew-role-next-button {
+    left: 288px;
 }
 
 .crew-focus-button {
-    left: 288px;
-    width: 148px;
+    left: 384px;
+    width: 100px;
+}
+
+.colony-forecast-panel {
+    left: 16px;
+    top: 424px;
+    width: 496px;
+    height: 104px;
+    background-color: rgba(5, 7, 9, 0.76);
+}
+
+.colony-forecast-text {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 8px;
+    bottom: 38px;
+    color: rgb(226, 236, 222);
+    font-size: 11px;
+    -unity-text-align: upper-left;
+    white-space: normal;
+}
+
+.research-button {
+    bottom: 8px;
+    width: 120px;
+    height: 28px;
+    font-size: 11px;
+}
+
+.research-prev-button {
+    left: 12px;
+}
+
+.research-next-button {
+    left: 142px;
 }
 
 .scenario-panel {
     left: 16px;
-    bottom: 198px;
-    width: 564px;
-    height: 116px;
+    top: 536px;
+    width: 496px;
+    height: 68px;
     background-color: rgba(5, 7, 9, 0.76);
 }
 
@@ -246,65 +333,80 @@
     top: 8px;
     bottom: 8px;
     color: rgb(226, 237, 231);
-    font-size: 15px;
+    font-size: 12px;
     -unity-text-align: upper-left;
     white-space: normal;
 }
 
 .inspect-panel {
-    right: 16px;
-    top: 28%;
-    bottom: 18%;
-    width: 314px;
+    right: 12px;
+    top: 230px;
+    bottom: 112px;
+    width: 340px;
     background-color: rgba(5, 6, 8, 0.76);
 }
 
 .inspect-text {
     position: absolute;
-    left: 14px;
-    right: 14px;
-    top: 14px;
-    bottom: 72px;
+    left: 12px;
+    right: 12px;
+    top: 12px;
+    bottom: 60px;
     color: rgb(224, 232, 235);
-    font-size: 16px;
+    font-size: 13px;
     -unity-text-align: upper-left;
+    white-space: normal;
 }
 
 .priority-down-button {
-    left: 14px;
-    bottom: 14px;
-    width: 76px;
-    height: 44px;
+    left: 12px;
+    bottom: 12px;
+    width: 68px;
+    height: 38px;
 }
 
 .priority-up-button {
-    left: 98px;
-    bottom: 14px;
-    width: 76px;
-    height: 44px;
+    left: 88px;
+    bottom: 12px;
+    width: 68px;
+    height: 38px;
 }
 
 .inspect-action-slot {
     position: absolute;
-    right: 14px;
-    bottom: 14px;
-    width: 110px;
-    height: 44px;
+    right: 12px;
+    bottom: 12px;
+    width: 164px;
+    height: 38px;
+}
+
+.storage-filter-button {
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 78px;
+}
+
+.storage-sweep-button {
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 78px;
 }
 
 .command-bar {
     left: 0;
     right: 0;
     bottom: 0;
-    height: 132px;
+    height: 104px;
     background-color: rgba(4, 5, 6, 0.90);
 }
 
 .log-panel {
     left: 16px;
-    bottom: 146px;
-    width: 564px;
-    height: 44px;
+    bottom: 112px;
+    width: 496px;
+    height: 32px;
     background-color: rgba(5, 6, 7, 0.68);
 }
 
@@ -315,16 +417,16 @@
     top: 0;
     bottom: 0;
     color: rgb(237, 230, 184);
-    font-size: 15px;
+    font-size: 13px;
     -unity-text-align: middle-left;
 }
 
 .end-state-panel {
     left: 50%;
     top: 50%;
-    width: 520px;
-    height: 248px;
-    translate: -260px -124px;
+    width: 560px;
+    height: 286px;
+    translate: -280px -143px;
     background-color: rgba(4, 6, 8, 0.94);
     border-top-width: 1px;
     border-right-width: 1px;
@@ -352,7 +454,7 @@
     left: 28px;
     right: 28px;
     top: 72px;
-    height: 74px;
+    height: 112px;
     color: rgb(222, 234, 235);
     font-size: 16px;
     -unity-text-align: upper-center;
@@ -360,8 +462,8 @@
 }
 
 .end-state-button {
-    top: 168px;
-    width: 142px;
+    top: 208px;
+    width: 154px;
     height: 48px;
     font-size: 14px;
 }
@@ -371,11 +473,70 @@
 }
 
 .end-state-new-run-button {
-    left: 189px;
+    left: 203px;
 }
 
 .end-state-continue-button {
-    left: 344px;
+    left: 372px;
+}
+
+.start-state-panel {
+    left: 50%;
+    top: 50%;
+    width: 660px;
+    height: 318px;
+    translate: -330px -159px;
+    background-color: rgba(4, 6, 8, 0.96);
+    border-top-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    border-top-color: rgb(98, 134, 139);
+    border-right-color: rgb(98, 134, 139);
+    border-bottom-color: rgb(22, 29, 32);
+    border-left-color: rgb(98, 134, 139);
+}
+
+.start-state-title {
+    position: absolute;
+    left: 28px;
+    right: 28px;
+    top: 20px;
+    height: 48px;
+    color: rgb(247, 237, 188);
+    font-size: 28px;
+    -unity-text-align: middle-center;
+}
+
+.start-state-body {
+    position: absolute;
+    left: 36px;
+    right: 36px;
+    top: 84px;
+    height: 130px;
+    color: rgb(222, 235, 235);
+    font-size: 16px;
+    -unity-text-align: upper-center;
+    white-space: normal;
+}
+
+.start-state-button {
+    top: 236px;
+    width: 176px;
+    height: 52px;
+    font-size: 14px;
+}
+
+.start-state-begin-button {
+    left: 46px;
+}
+
+.start-state-load-button {
+    left: 242px;
+}
+
+.start-state-continue-button {
+    left: 438px;
 }
 
 .toolbar-host {
@@ -386,12 +547,18 @@
     bottom: 0;
 }
 
+.command-toolbar {
+    right: 540px;
+    overflow: hidden;
+}
+
 .toolbar-slot {
     position: absolute;
 }
 
 .projecton-button {
     position: absolute;
+    overflow: hidden;
     background-color: rgba(33, 41, 46, 0.96);
     color: rgb(235, 240, 235);
     font-size: 12px;
@@ -424,7 +591,7 @@
 }
 
 .command-mode-button {
-    font-size: 10px;
+    font-size: 9px;
 }
 
 .fill-button {
@@ -457,28 +624,28 @@
 }
 
 .action-button {
-    top: 14px;
-    bottom: 14px;
+    top: 10px;
+    bottom: 10px;
 }
 
 .save-button {
-    right: 468px;
-    width: 132px;
+    right: 410px;
+    width: 118px;
 }
 
 .load-button {
-    right: 324px;
-    width: 132px;
+    right: 282px;
+    width: 118px;
 }
 
 .pause-button {
-    right: 180px;
-    width: 132px;
+    right: 154px;
+    width: 118px;
 }
 
 .speed-button {
-    right: 18px;
-    width: 150px;
+    right: 16px;
+    width: 128px;
 }
 
 .mode-selected {

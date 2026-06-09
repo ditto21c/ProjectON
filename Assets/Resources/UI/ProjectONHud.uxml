@@ -15,6 +15,13 @@
             <ui:VisualElement name="OverlayLegendRows" class="overlay-legend-rows" />
         </ui:VisualElement>
 
+        <ui:VisualElement name="PrintingPodOfferPanel" class="hud-panel printing-pod-offer-panel hidden">
+            <ui:Label name="PrintingPodOfferText" class="hud-label printing-pod-offer-text" />
+            <ui:Button name="PrintingPodOfferButton0" class="projecton-button printing-pod-offer-button printing-pod-offer-button-0" />
+            <ui:Button name="PrintingPodOfferButton1" class="projecton-button printing-pod-offer-button printing-pod-offer-button-1" />
+            <ui:Button name="PrintingPodOfferButton2" class="projecton-button printing-pod-offer-button printing-pod-offer-button-2" />
+        </ui:VisualElement>
+
         <ui:VisualElement name="SchedulePanel" class="hud-panel schedule-panel">
             <ui:Button name="ScheduleStartDownButton" class="projecton-button schedule-button schedule-start-down" />
             <ui:Button name="ScheduleStartUpButton" class="projecton-button schedule-button schedule-start-up" />
@@ -43,7 +50,15 @@
             <ui:Label name="CrewVitalsText" class="hud-label crew-vitals-text" />
             <ui:Button name="CrewPrevButton" class="projecton-button crew-button crew-prev-button" />
             <ui:Button name="CrewNextButton" class="projecton-button crew-button crew-next-button" />
+            <ui:Button name="CrewRolePrevButton" class="projecton-button crew-button crew-role-prev-button" />
+            <ui:Button name="CrewRoleNextButton" class="projecton-button crew-button crew-role-next-button" />
             <ui:Button name="CrewFocusButton" class="projecton-button crew-button crew-focus-button" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="ColonyForecastPanel" class="hud-panel colony-forecast-panel">
+            <ui:Label name="ColonyForecastText" class="hud-label colony-forecast-text" />
+            <ui:Button name="ResearchPrevButton" class="projecton-button research-button research-prev-button" />
+            <ui:Button name="ResearchNextButton" class="projecton-button research-button research-next-button" />
         </ui:VisualElement>
 
         <ui:VisualElement name="ScenarioPanel" class="hud-panel scenario-panel">
@@ -58,11 +73,13 @@
                 <ui:Button name="CancelSelectedButton" class="projecton-button fill-button" />
                 <ui:Button name="SignalSwitchButton" class="projecton-button fill-button" />
                 <ui:Button name="AirlockToggleButton" class="projecton-button fill-button" />
+                <ui:Button name="StorageFilterButton" class="projecton-button storage-filter-button" />
+                <ui:Button name="StorageSweepOnlyButton" class="projecton-button storage-sweep-button" />
             </ui:VisualElement>
         </ui:VisualElement>
 
         <ui:VisualElement name="CommandBar" class="hud-panel command-bar">
-            <ui:VisualElement name="CommandToolbar" class="toolbar-host" />
+            <ui:VisualElement name="CommandToolbar" class="toolbar-host command-toolbar" />
             <ui:Button name="SaveButton" class="projecton-button action-button save-button" />
             <ui:Button name="LoadButton" class="projecton-button action-button load-button" />
             <ui:Button name="PauseButton" class="projecton-button action-button pause-button" />
@@ -75,6 +92,14 @@
             <ui:Button name="EndStateLoadButton" class="projecton-button end-state-button end-state-load-button" />
             <ui:Button name="EndStateNewRunButton" class="projecton-button end-state-button end-state-new-run-button" />
             <ui:Button name="EndStateContinueButton" class="projecton-button end-state-button end-state-continue-button" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="StartStatePanel" class="hud-panel start-state-panel hidden">
+            <ui:Label name="StartStateTitleText" class="hud-label start-state-title" />
+            <ui:Label name="StartStateBodyText" class="hud-label start-state-body" />
+            <ui:Button name="StartStateBeginButton" class="projecton-button start-state-button start-state-begin-button" />
+            <ui:Button name="StartStateLoadButton" class="projecton-button start-state-button start-state-load-button" />
+            <ui:Button name="StartStateContinueButton" class="projecton-button start-state-button start-state-continue-button" />
         </ui:VisualElement>
 
         <ui:VisualElement name="LogPanel" class="hud-panel log-panel">
